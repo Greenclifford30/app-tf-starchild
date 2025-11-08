@@ -20,7 +20,7 @@ output "api_gateway_root_resource_id" {
 
 output "api_gateway_url" {
   description = "URL of the API Gateway"
-  value       = "${aws_api_gateway_deployment.main.invoke_url}"
+  value       = "${aws_api_gateway_stage.main.invoke_url}"
 }
 
 output "api_gateway_stage_name" {
