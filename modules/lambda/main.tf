@@ -24,6 +24,81 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   role       = aws_iam_role.lambda_execution.name
 }
 
+# DynamoDB Access Policy
+resource "aws_iam_role_policy" "dynamodb_access" {
+  count = length(var.dynamodb_table_arns) > 0 ? 1 : 0
+
+  name = "${var.project_name}-${var.environment}-lambda-dynamodb"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:BatchGetItem",
+          "dynamodb:BatchWriteItem",
+          "dynamodb:ConditionCheckItem"
+        ]
+        Resource = concat(
+          values(var.dynamodb_table_arns),
+          [for arn in values(var.dynamodb_table_arns) : "${arn}/index/*"]
+        )
+      }
+    ]
+  })
+}
+
+# Secrets Manager Access Policy
+resource "aws_iam_role_policy" "secrets_access" {
+  count = length(var.secrets_arns) > 0 ? 1 : 0
+
+  name = "${var.project_name}-${var.environment}-lambda-secrets"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = var.secrets_arns
+      }
+    ]
+  })
+}
+
+# EventBridge Access Policy
+resource "aws_iam_role_policy" "eventbridge_access" {
+  count = var.eventbridge_bus_arn != "" ? 1 : 0
+
+  name = "${var.project_name}-${var.environment}-lambda-eventbridge"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "events:PutEvents"
+        ]
+        Resource = var.eventbridge_bus_arn
+      }
+    ]
+  })
+}
+
 # Data source for ZIP files
 data "archive_file" "lambda_zip" {
   for_each = var.functions

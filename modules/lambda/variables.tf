@@ -37,3 +37,21 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "dynamodb_table_arns" {
+  description = "Map of DynamoDB table ARNs for Lambda permissions"
+  type        = map(string)
+  default     = {}
+}
+
+variable "secrets_arns" {
+  description = "List of Secrets Manager ARNs that Lambda functions need access to"
+  type        = list(string)
+  default     = []
+}
+
+variable "eventbridge_bus_arn" {
+  description = "EventBridge bus ARN for domain events (optional)"
+  type        = string
+  default     = ""
+}
