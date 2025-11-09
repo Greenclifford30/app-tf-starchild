@@ -16,7 +16,12 @@ lambda_functions = {
     timeout      = 5
     memory_size  = 128
     source_path  = "./src/lambda/health"
-    environment_variables = merge(local.common_env, {})
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+    }
   }
 
   # Catalog (public)
@@ -27,10 +32,14 @@ lambda_functions = {
     timeout      = 15
     memory_size  = 256
     source_path  = "./src/lambda/get_products"
-    environment_variables = merge(local.common_env, {
-      PRODUCTS_TABLE = local.tables.products
-      VARIANTS_TABLE = local.tables.variants
-    })
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+      PRODUCTS_TABLE  = "starchild-dev-products"
+      VARIANTS_TABLE  = "starchild-dev-variants"
+    }
   }
   get_product_by_id = {
     description  = "Get product by ID"
@@ -39,10 +48,14 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/get_product_by_id"
-    environment_variables = merge(local.common_env, {
-      PRODUCTS_TABLE = local.tables.products
-      VARIANTS_TABLE = local.tables.variants
-    })
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+      PRODUCTS_TABLE  = "starchild-dev-products"
+      VARIANTS_TABLE  = "starchild-dev-variants"
+    }
   }
 
   # Cart (public)
@@ -53,13 +66,17 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/create_cart"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE         = local.tables.carts
-      PRODUCTS_TABLE      = local.tables.products
-      VARIANTS_TABLE      = local.tables.variants
-      CART_TTL_HOURS      = "72"
-      IDEMPOTENCY_TABLE   = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      CARTS_TABLE       = "starchild-dev-carts"
+      PRODUCTS_TABLE    = "starchild-dev-products"
+      VARIANTS_TABLE    = "starchild-dev-variants"
+      CART_TTL_HOURS    = "72"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
   get_cart = {
     description  = "Get cart"
@@ -68,9 +85,13 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/get_cart"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE = local.tables.carts
-    })
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+      CARTS_TABLE     = "starchild-dev-carts"
+    }
   }
   update_cart = {
     description  = "Update cart (addresses/discounts)"
@@ -79,10 +100,14 @@ lambda_functions = {
     timeout      = 15
     memory_size  = 256
     source_path  = "./src/lambda/update_cart"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE       = local.tables.carts
-      IDEMPOTENCY_TABLE = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      CARTS_TABLE       = "starchild-dev-carts"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
   add_cart_item = {
     description  = "Add item to cart"
@@ -91,12 +116,16 @@ lambda_functions = {
     timeout      = 15
     memory_size  = 256
     source_path  = "./src/lambda/add_cart_item"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE    = local.tables.carts
-      VARIANTS_TABLE = local.tables.variants
-      INVENTORY_TABLE= local.tables.inventory
-      IDEMPOTENCY_TABLE = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      CARTS_TABLE       = "starchild-dev-carts"
+      VARIANTS_TABLE    = "starchild-dev-variants"
+      INVENTORY_TABLE   = "starchild-dev-inventory"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
   update_cart_item = {
     description  = "Update cart item"
@@ -105,12 +134,16 @@ lambda_functions = {
     timeout      = 15
     memory_size  = 256
     source_path  = "./src/lambda/update_cart_item"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE    = local.tables.carts
-      VARIANTS_TABLE = local.tables.variants
-      INVENTORY_TABLE= local.tables.inventory
-      IDEMPOTENCY_TABLE = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      CARTS_TABLE       = "starchild-dev-carts"
+      VARIANTS_TABLE    = "starchild-dev-variants"
+      INVENTORY_TABLE   = "starchild-dev-inventory"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
   remove_cart_item = {
     description  = "Remove cart item"
@@ -119,10 +152,14 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/remove_cart_item"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE = local.tables.carts
-      INVENTORY_TABLE= local.tables.inventory
-    })
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+      CARTS_TABLE     = "starchild-dev-carts"
+      INVENTORY_TABLE = "starchild-dev-inventory"
+    }
   }
 
   # Shipping (public)
@@ -133,10 +170,14 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/get_shipping_rates"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE = local.tables.carts
-      SHIP_PROVIDER = "stub" # e.g., Shippo/EasyPost/custom
-    })
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+      CARTS_TABLE     = "starchild-dev-carts"
+      SHIP_PROVIDER   = "stub"
+    }
   }
   select_shipping_rate = {
     description  = "Select shipping rate on cart"
@@ -145,10 +186,14 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/select_shipping_rate"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE = local.tables.carts
-      IDEMPOTENCY_TABLE = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      CARTS_TABLE       = "starchild-dev-carts"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
 
   # Checkout
@@ -159,11 +204,15 @@ lambda_functions = {
     timeout      = 20
     memory_size  = 512
     source_path  = "./src/lambda/create_checkout_session"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE           = local.tables.carts
-      STRIPE_SECRET_ARN     = local.secrets.stripe_secret_arn
-      IDEMPOTENCY_TABLE     = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      CARTS_TABLE       = "starchild-dev-carts"
+      STRIPE_SECRET_ARN = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:starchild/dev/stripe-api-key"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
 
   # Payments
@@ -174,11 +223,15 @@ lambda_functions = {
     timeout      = 25
     memory_size  = 512
     source_path  = "./src/lambda/create_payment_intent"
-    environment_variables = merge(local.common_env, {
-      CARTS_TABLE           = local.tables.carts
-      STRIPE_SECRET_ARN     = local.secrets.stripe_secret_arn
-      IDEMPOTENCY_TABLE     = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      CARTS_TABLE       = "starchild-dev-carts"
+      STRIPE_SECRET_ARN = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:starchild/dev/stripe-api-key"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
   get_payment_intent = {
     description  = "Retrieve PaymentIntent"
@@ -187,9 +240,13 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/get_payment_intent"
-    environment_variables = merge(local.common_env, {
-      STRIPE_SECRET_ARN     = local.secrets.stripe_secret_arn
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      STRIPE_SECRET_ARN = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:starchild/dev/stripe-api-key"
+    }
   }
   webhook_payment = {
     description  = "Stripe webhook receiver"
@@ -198,13 +255,17 @@ lambda_functions = {
     timeout      = 20
     memory_size  = 256
     source_path  = "./src/lambda/webhook_payment"
-    environment_variables = merge(local.common_env, {
-      STRIPE_WEBHOOK_SECRET_ARN = local.secrets.stripe_webhook_secret_arn
-      CARTS_TABLE               = local.tables.carts
-      ORDERS_TABLE              = local.tables.orders
-      IDEMPOTENCY_TABLE         = "idempotency"
-      EVENTS_BUS_NAME           = "starchild-domain-events" # if using EventBridge
-    })
+    environment_variables = {
+      ENVIRONMENT               = "dev"
+      ALLOWED_ORIGINS           = "*"
+      LOG_LEVEL                 = "INFO"
+      AWS_REGION                = "us-east-1"
+      STRIPE_WEBHOOK_SECRET_ARN = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:starchild/dev/stripe-webhook-secret"
+      CARTS_TABLE               = "starchild-dev-carts"
+      ORDERS_TABLE              = "starchild-dev-orders"
+      IDEMPOTENCY_TABLE         = "starchild-dev-idempotency"
+      EVENTS_BUS_NAME           = "starchild-domain-events"
+    }
   }
 
   # Orders (protected)
@@ -215,10 +276,14 @@ lambda_functions = {
     timeout      = 15
     memory_size  = 256
     source_path  = "./src/lambda/get_orders"
-    environment_variables = merge(local.common_env, {
-      ORDERS_TABLE  = local.tables.orders
-      CUSTOMERS_TABLE = local.tables.customers
-    })
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+      ORDERS_TABLE    = "starchild-dev-orders"
+      CUSTOMERS_TABLE = "starchild-dev-customers"
+    }
   }
   create_order = {
     description  = "Create order from paid cart (server-side)"
@@ -227,11 +292,15 @@ lambda_functions = {
     timeout      = 20
     memory_size  = 256
     source_path  = "./src/lambda/create_order"
-    environment_variables = merge(local.common_env, {
-      ORDERS_TABLE  = local.tables.orders
-      CARTS_TABLE   = local.tables.carts
-      IDEMPOTENCY_TABLE = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      ORDERS_TABLE      = "starchild-dev-orders"
+      CARTS_TABLE       = "starchild-dev-carts"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
   get_order_by_id = {
     description  = "Get order by ID"
@@ -240,9 +309,13 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/get_order_by_id"
-    environment_variables = merge(local.common_env, {
-      ORDERS_TABLE  = local.tables.orders
-    })
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+      ORDERS_TABLE    = "starchild-dev-orders"
+    }
   }
   cancel_order = {
     description  = "Request order cancellation"
@@ -251,10 +324,14 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/cancel_order"
-    environment_variables = merge(local.common_env, {
-      ORDERS_TABLE  = local.tables.orders
-      IDEMPOTENCY_TABLE = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      ORDERS_TABLE      = "starchild-dev-orders"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
 
   # Me (protected)
@@ -265,9 +342,13 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/get_profile"
-    environment_variables = merge(local.common_env, {
-      CUSTOMERS_TABLE = local.tables.customers
-    })
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+      CUSTOMERS_TABLE = "starchild-dev-customers"
+    }
   }
   update_profile = {
     description  = "Update current user profile"
@@ -276,10 +357,14 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/update_profile"
-    environment_variables = merge(local.common_env, {
-      CUSTOMERS_TABLE = local.tables.customers
-      IDEMPOTENCY_TABLE = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      CUSTOMERS_TABLE   = "starchild-dev-customers"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
 
   # Admin (optional, protected)
@@ -290,11 +375,15 @@ lambda_functions = {
     timeout      = 20
     memory_size  = 256
     source_path  = "./src/lambda/admin_create_product"
-    environment_variables = merge(local.common_env, {
-      PRODUCTS_TABLE  = local.tables.products
-      VARIANTS_TABLE  = local.tables.variants
-      IDEMPOTENCY_TABLE = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      PRODUCTS_TABLE    = "starchild-dev-products"
+      VARIANTS_TABLE    = "starchild-dev-variants"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
   admin_list_products = {
     description  = "Admin: list products (all statuses)"
@@ -303,10 +392,14 @@ lambda_functions = {
     timeout      = 15
     memory_size  = 256
     source_path  = "./src/lambda/admin_list_products"
-    environment_variables = merge(local.common_env, {
-      PRODUCTS_TABLE  = local.tables.products
-      VARIANTS_TABLE  = local.tables.variants
-    })
+    environment_variables = {
+      ENVIRONMENT     = "dev"
+      ALLOWED_ORIGINS = "*"
+      LOG_LEVEL       = "INFO"
+      AWS_REGION      = "us-east-1"
+      PRODUCTS_TABLE  = "starchild-dev-products"
+      VARIANTS_TABLE  = "starchild-dev-variants"
+    }
   }
   admin_update_product = {
     description  = "Admin: update product/variants"
@@ -315,11 +408,15 @@ lambda_functions = {
     timeout      = 20
     memory_size  = 256
     source_path  = "./src/lambda/admin_update_product"
-    environment_variables = merge(local.common_env, {
-      PRODUCTS_TABLE  = local.tables.products
-      VARIANTS_TABLE  = local.tables.variants
-      IDEMPOTENCY_TABLE = "idempotency"
-    })
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      PRODUCTS_TABLE    = "starchild-dev-products"
+      VARIANTS_TABLE    = "starchild-dev-variants"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
+    }
   }
   admin_inventory_adjust = {
     description  = "Admin: inventory adjustment (atomic)"
@@ -328,11 +425,15 @@ lambda_functions = {
     timeout      = 10
     memory_size  = 256
     source_path  = "./src/lambda/admin_inventory_adjust"
-    environment_variables = merge(local.common_env, {
-      INVENTORY_TABLE   = local.tables.inventory
-      IDEMPOTENCY_TABLE = "idempotency"
+    environment_variables = {
+      ENVIRONMENT       = "dev"
+      ALLOWED_ORIGINS   = "*"
+      LOG_LEVEL         = "INFO"
+      AWS_REGION        = "us-east-1"
+      INVENTORY_TABLE   = "starchild-dev-inventory"
+      IDEMPOTENCY_TABLE = "starchild-dev-idempotency"
       EVENTS_BUS_NAME   = "starchild-domain-events"
-    })
+    }
   }
 }
 
