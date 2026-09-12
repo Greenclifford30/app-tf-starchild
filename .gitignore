@@ -45,3 +45,7 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# AI Agent Files
+*.claude
+CLAUDE.md
