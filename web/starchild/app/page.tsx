@@ -10,7 +10,7 @@ export default function Home() {
 
       <header className="site-header">
         <Link className="wordmark" href="/" aria-label="Starchild home">
-          Starchild<span aria-hidden="true">*</span>
+          <img className="brand-logo" src="/Starchild_logo.svg" alt="Starchild" />
         </Link>
 
         <nav className="main-nav" aria-label="Main navigation">
@@ -109,8 +109,8 @@ export default function Home() {
 
           <div className="story-media media-frame">
             <Image
-              src="/images/starchild-knit-editorial.png"
-              alt="Model wearing a soft grey knit and navy trousers"
+              src="/products/call_unto_him_crewneck.png"
+              alt="Call Unto Him Starchild crewneck"
               fill
               sizes="(max-width: 767px) 100vw, 42vw"
             />
@@ -125,13 +125,19 @@ export default function Home() {
         </section>
 
         <section className="community" id="community" aria-labelledby="community-title">
-          <div className="community-media media-frame">
-            <Image
-              src="/images/starchild-community-walk.png"
-              alt="Two friends wearing Starchild styles while walking through the city"
-              fill
-              sizes="100vw"
-            />
+          <div className="community-media community-brand-panel">
+            <div className="community-logo-wrap">
+              <img className="community-logo" src="/Starchild_logo.svg" alt="Starchild" />
+              <p>Made to move with you.</p>
+            </div>
+            <div className="community-product-frame">
+              <Image
+                src="/products/starchild_juneteenth_shirt.png"
+                alt="Starchild Juneteenth T-shirt"
+                fill
+                sizes="(max-width: 767px) 72vw, 36vw"
+              />
+            </div>
           </div>
           <div className="community-intro">
             <h2 id="community-title">A shared point of view.</h2>
@@ -144,7 +150,7 @@ export default function Home() {
       <footer className="site-footer">
         <div className="footer-top">
           <Link className="wordmark" href="/" aria-label="Back to Starchild home">
-            Starchild<span aria-hidden="true">*</span>
+            <img className="brand-logo" src="/Starchild_logo.svg" alt="Starchild" />
           </Link>
           <p>Thoughtful clothing for an everyday orbit.</p>
         </div>
