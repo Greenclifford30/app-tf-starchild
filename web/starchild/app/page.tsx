@@ -1,7 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import BagLink from "./bag-link";
+import BrandLogo from "./brand-logo";
+import MobileNavigation from "./mobile-navigation";
 import { featuredProducts } from "./products";
+
+const primaryNavigation = [
+  { href: "/shop", label: "Shop" },
+  { href: "#new-arrivals", label: "New arrivals" },
+  { href: "#story", label: "Our story" },
+  { href: "#community", label: "Community" },
+];
 
 export default function Home() {
   return (
@@ -10,7 +19,7 @@ export default function Home() {
 
       <header className="site-header">
         <Link className="wordmark" href="/" aria-label="Starchild home">
-          <img className="brand-logo" src="/Starchild_logo.svg" alt="Starchild" />
+          <BrandLogo />
         </Link>
 
         <nav className="main-nav" aria-label="Main navigation">
@@ -22,6 +31,7 @@ export default function Home() {
 
         <div className="utility-nav">
           <BagLink />
+          <MobileNavigation items={primaryNavigation} />
         </div>
       </header>
 
@@ -127,7 +137,7 @@ export default function Home() {
         <section className="community" id="community" aria-labelledby="community-title">
           <div className="community-media community-brand-panel">
             <div className="community-logo-wrap">
-              <img className="community-logo" src="/Starchild_logo.svg" alt="Starchild" />
+              <BrandLogo className="community-logo" decorative={false} />
               <p>Made to move with you.</p>
             </div>
             <div className="community-product-frame">
@@ -150,7 +160,7 @@ export default function Home() {
       <footer className="site-footer">
         <div className="footer-top">
           <Link className="wordmark" href="/" aria-label="Back to Starchild home">
-            <img className="brand-logo" src="/Starchild_logo.svg" alt="Starchild" />
+            <BrandLogo />
           </Link>
           <p>Thoughtful clothing for an everyday orbit.</p>
         </div>

@@ -3,6 +3,15 @@ import Link from "next/link";
 import { products } from "../products";
 import ShopCatalog from "./shop-catalog";
 import BagLink from "../bag-link";
+import BrandLogo from "../brand-logo";
+import MobileNavigation from "../mobile-navigation";
+
+const shopNavigation = [
+  { href: "/shop", label: "Shop all" },
+  { href: "/#new-arrivals", label: "New arrivals" },
+  { href: "/#story", label: "Our story" },
+  { href: "/#community", label: "Community" },
+];
 
 export const metadata: Metadata = {
   title: "Shop All | Starchild Clothing",
@@ -16,7 +25,7 @@ export default function ShopPage() {
 
       <header className="shop-header">
         <Link className="wordmark" href="/" aria-label="Starchild home">
-          Starchild<span aria-hidden="true">*</span>
+          <BrandLogo />
         </Link>
         <nav className="shop-nav" aria-label="Shop navigation">
           <Link href="/shop" aria-current="page">Shop all</Link>
@@ -26,6 +35,7 @@ export default function ShopPage() {
         <div className="utility-nav">
           <a href="#collection">Collection</a>
           <BagLink />
+          <MobileNavigation items={shopNavigation} />
         </div>
       </header>
 
@@ -41,7 +51,7 @@ export default function ShopPage() {
       <footer className="site-footer shop-footer">
         <div className="footer-top">
           <Link className="wordmark" href="/" aria-label="Starchild home">
-            Starchild<span aria-hidden="true">*</span>
+            <BrandLogo />
           </Link>
           <p>Thoughtful clothing for an everyday orbit.</p>
         </div>

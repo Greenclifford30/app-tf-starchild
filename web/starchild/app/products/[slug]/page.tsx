@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import BrandLogo from "../../brand-logo";
 import { getProduct, products } from "../../products";
 import PurchasePanel from "./purchase-panel";
 
@@ -41,7 +42,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     <main className="product-page">
       <header className="product-page-header">
         <Link className="wordmark" href="/" aria-label="Starchild home">
-          Starchild<span aria-hidden="true">*</span>
+          <BrandLogo />
         </Link>
         <Link className="text-link" href="/shop">
           Back to collection
