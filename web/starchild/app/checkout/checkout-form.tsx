@@ -96,7 +96,6 @@ export default function CheckoutForm() {
   if (submitted) {
     return (
       <section className="order-confirmation" aria-labelledby="confirmation-title">
-        <div className="confirmation-star" aria-hidden="true">*</div>
         <p className="eyebrow">Order request received</p>
         <h1 id="confirmation-title">You&apos;re in the orbit.</h1>
         <p className="confirmation-lede">Your order request <strong>{orderNumber}</strong> is with the Starchild team.</p>

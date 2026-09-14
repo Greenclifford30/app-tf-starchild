@@ -45,7 +45,6 @@ export default function ShopPage() {
           <h1 id="shop-title">Find your orbit.</h1>
         </div>
         <p className="shop-intro-summary">All the pieces, each made to carry a little more meaning through your everyday.</p>
-        <span className="shop-star" aria-hidden="true">*</span>
       </section>
 
       <ShopCatalog products={products} />

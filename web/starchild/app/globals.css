@@ -87,7 +87,6 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .shop-intro .eyebrow { margin-bottom: .75rem; }
 .shop-intro h1 { font-size: clamp(2.75rem, 5vw, 4.75rem); font-weight: 650; letter-spacing: -.075em; line-height: .95; margin: 0; max-width: 9ch; }
 .shop-intro-summary { color: var(--text-secondary); font-size: .9375rem; line-height: 1.55; margin: 0; max-width: 20rem; position: relative; z-index: 1; }
-.shop-star { color: var(--solar); font-size: clamp(8rem, 15vw, 14rem); font-weight: 300; line-height: .6; position: absolute; right: clamp(1rem, 5vw, 5rem); top: 50%; transform: rotate(12deg) translateY(-45%); }
 .shop-collection { margin: 0 auto; max-width: 1440px; padding: clamp(2rem, 5vw, 4rem) clamp(1.25rem, 4vw, 4rem) clamp(5rem, 10vw, 9rem); }
 .shop-toolbar { align-items: end; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding-bottom: 1rem; }
 .shop-count { font-family: var(--font-geist-mono), monospace; font-size: .75rem; font-weight: 650; letter-spacing: .04em; margin: 0; text-transform: uppercase; }
@@ -122,7 +121,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .account-nav a { align-items: center; display: flex; font-size: .875rem; font-weight: 600; justify-content: space-between; min-height: 2.75rem; padding: .55rem .7rem; transition: background-color 160ms ease, color 160ms ease; }
 .account-nav a:hover { background: var(--tint); }.account-nav a[aria-current="page"] { background: var(--ink); color: var(--surface); }.account-nav span { color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: .6875rem; }.account-nav a[aria-current="page"] span { color: inherit; }
 .account-signout { align-self: start; background: transparent; border: 0; border-bottom: 1px solid currentColor; color: var(--muted); cursor: pointer; font: inherit; font-size: .75rem; font-weight: 650; margin-top: auto; padding: .15rem 0; transition: color 160ms ease; }.account-signout:hover { color: var(--ink); }
-.account-content { padding: clamp(3rem, 6vw, 6rem) clamp(1.25rem, 6vw, 6rem) clamp(5rem, 8vw, 8rem); }.account-overview { border-bottom: 1px solid var(--line); padding-bottom: clamp(3rem, 5vw, 4.5rem); }.account-section-heading { align-items: end; display: flex; justify-content: space-between; }.account-section-heading h2, .account-section-title-row h2 { font-size: clamp(1.75rem, 3vw, 2.75rem); font-weight: 650; letter-spacing: -.06em; line-height: 1; margin: 0; }.account-section-heading p { color: var(--muted); line-height: 1.5; margin: .85rem 0 0; }.account-star { color: var(--solar); font-size: clamp(4rem, 8vw, 7rem); font-weight: 300; line-height: .65; transform: rotate(12deg); }
+.account-content { padding: clamp(3rem, 6vw, 6rem) clamp(1.25rem, 6vw, 6rem) clamp(5rem, 8vw, 8rem); }.account-overview { border-bottom: 1px solid var(--line); padding-bottom: clamp(3rem, 5vw, 4.5rem); }.account-section-heading { align-items: end; display: flex; justify-content: space-between; }.account-section-heading h2, .account-section-title-row h2 { font-size: clamp(1.75rem, 3vw, 2.75rem); font-weight: 650; letter-spacing: -.06em; line-height: 1; margin: 0; }.account-section-heading p { color: var(--muted); line-height: 1.5; margin: .85rem 0 0; }
 .account-summary-grid { background: var(--line); display: grid; gap: 1px; grid-template-columns: 1.2fr 1fr 1fr; margin-top: 3rem; }.account-summary-grid article { background: var(--surface); display: flex; flex-direction: column; min-height: 10.5rem; padding: 1.25rem; }.account-summary-grid p, .account-detail-grid p, .account-saved-piece > div > p { color: var(--muted); font-size: .6875rem; font-weight: 700; letter-spacing: .08em; margin: 0; text-transform: uppercase; }.account-summary-grid strong { font-size: clamp(2rem, 4vw, 3.25rem); font-weight: 650; letter-spacing: -.075em; line-height: 1; margin-top: auto; }.account-summary-grid span { color: var(--muted); font-size: .75rem; margin-top: .6rem; }
 .account-orders, .account-saved, .account-details { border-bottom: 1px solid var(--line); padding: clamp(3rem, 6vw, 5rem) 0; }.account-details { border-bottom: 0; padding-bottom: 0; }.account-section-title-row { align-items: center; display: flex; gap: 1rem; justify-content: space-between; }.account-order-card { border: 1px solid var(--line); margin-top: 1.75rem; }.account-order-meta { align-items: start; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding: 1rem 1.25rem; }.account-order-meta p { color: var(--muted); font-size: .75rem; margin: .3rem 0 0; }.account-order-meta .account-order-number { color: var(--ink); font-size: .8125rem; font-weight: 650; margin: 0; }.account-order-status { color: var(--navy) !important; font-weight: 650; }
 .account-order-product { align-items: center; display: grid; gap: 1.25rem; grid-template-columns: 7rem minmax(0, 1fr) auto; padding: 1.25rem; }.account-order-image { aspect-ratio: 3 / 4; background: var(--canvas); overflow: hidden; position: relative; }.account-order-image img, .account-saved-image img { object-fit: cover; }.account-order-product h3, .account-saved-piece h3 { font-size: 1rem; font-weight: 650; letter-spacing: -.035em; margin: 0; }.account-order-product h3 + p { color: var(--muted); font-size: .8125rem; margin: .45rem 0 .85rem; }.account-order-product strong, .account-saved-piece strong { font-size: .875rem; }
@@ -196,7 +195,6 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .summary-totals .summary-total dt { color: var(--ink); }
 .summary-reassurance { color: var(--muted); font-size: .75rem; line-height: 1.5; margin: 1.5rem 0 0; }
 .order-confirmation { margin: 0 auto; max-width: 42rem; padding: clamp(5rem, 14vw, 10rem) 1.25rem; text-align: center; }
-.confirmation-star { color: var(--solar); font-size: 4.5rem; line-height: .8; margin-bottom: 1.25rem; }
 .order-confirmation .eyebrow { margin-bottom: 1rem; }
 .confirmation-lede { color: var(--muted); font-size: 1.0625rem; line-height: 1.55; margin: 1.5rem auto 0; max-width: 31rem; }
 .confirmation-lede strong { color: var(--ink); }
@@ -264,7 +262,6 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .story-media { aspect-ratio: .82; min-height: 32rem; }
 .story-media img { object-position: center center; }
 .story-note { align-self: end; border-left: 1px solid color-mix(in srgb, var(--navy) 20%, transparent); color: var(--navy); padding: 2rem; }
-.star-mark { color: var(--solar); display: block; font-size: 2.75rem; line-height: 1; margin-bottom: 1.25rem; }
 .story-note p { font-size: .875rem; line-height: 1.5; margin: 0; }
 
 .community { padding: clamp(5rem, 10vw, 9rem) clamp(1.25rem, 4vw, 4rem); }
@@ -311,7 +308,6 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
   .shop-intro { display: block; padding: 2.25rem 1.25rem; }
   .shop-intro h1 { font-size: clamp(2.65rem, 13vw, 4rem); max-width: 7ch; }
   .shop-intro-summary { margin-top: 1.25rem; max-width: 18rem; }
-  .shop-star { font-size: 9rem; right: -.5rem; }
   .shop-toolbar { align-items: flex-start; flex-direction: column; gap: 1.25rem; }
   .shop-filters { width: 100%; }
   .shop-filters label { flex: 1; }

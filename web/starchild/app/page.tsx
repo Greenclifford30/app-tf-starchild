@@ -127,7 +127,6 @@ export default function Home() {
           </div>
 
           <div className="story-note" id="impact">
-            <span className="star-mark" aria-hidden="true">*</span>
             <p>
               Clear material, maker, and care details belong with every piece. Better choices need useful information.
             </p>
