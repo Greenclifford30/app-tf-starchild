@@ -23,26 +23,28 @@ export default function ShopPage() {
     <main className="shop-page">
       <div className="announcement">Complimentary standard shipping on orders over $100.</div>
 
-      <header className="shop-header">
+      <header className="site-header">
         <Link className="wordmark" href="/" aria-label="Starchild home">
           <BrandLogo />
         </Link>
-        <nav className="shop-nav" aria-label="Shop navigation">
-          <Link href="/shop" aria-current="page">Shop all</Link>
+        <nav className="main-nav" aria-label="Main navigation">
+          <Link href="/shop" aria-current="page">Shop</Link>
           <Link href="/#new-arrivals">New arrivals</Link>
           <Link href="/#story">Our story</Link>
+          <Link href="/#community">Community</Link>
         </nav>
         <div className="utility-nav">
-          <a href="#collection">Collection</a>
           <BagLink />
           <MobileNavigation items={shopNavigation} />
         </div>
       </header>
 
       <section className="shop-intro" aria-labelledby="shop-title">
-        <p className="eyebrow">Starchild collection</p>
-        <h1 id="shop-title">Find your orbit.</h1>
-        <p>All the pieces, each made to carry a little more meaning through your everyday.</p>
+        <div className="shop-intro-title">
+          <p className="eyebrow">Starchild collection</p>
+          <h1 id="shop-title">Find your orbit.</h1>
+        </div>
+        <p className="shop-intro-summary">All the pieces, each made to carry a little more meaning through your everyday.</p>
         <span className="shop-star" aria-hidden="true">*</span>
       </section>
 
