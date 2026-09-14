@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 type BrandLogoProps = {
   className?: string;
   decorative?: boolean;
@@ -7,7 +5,7 @@ type BrandLogoProps = {
 
 export default function BrandLogo({ className = "brand-logo", decorative = true }: BrandLogoProps) {
   return (
-    <Image
+    <img
       className={className}
       src="/Starchild_logo_transparent.svg"
       alt={decorative ? "" : "Starchild Clothing"}

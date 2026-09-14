@@ -2,19 +2,20 @@
 
 :root {
   --ink: #10172b;
-  --navy: #182d61;
+  --navy: #14295b;
   --solar: #f9e006;
   --canvas: #f7f8fc;
   --surface: #ffffff;
   --tint: #e8eeff;
-  --text-secondary: #46526a;
-  --text-tertiary: #596176;
+  --text-secondary: #344158;
+  --text-tertiary: #48556c;
   --muted: var(--text-secondary);
-  --line: #dce1ec;
+  --line: #cbd3e0;
   --success: #166534;
   --danger: #9f1f1f;
   --danger-surface: #fff0f0;
-  --logo-surface: #ffffff;
+  --logo-surface: #f7f8fc;
+  --on-brand: #ffffff;
   --font-sans: var(--font-geist-sans), Arial, sans-serif;
 }
 
@@ -274,7 +275,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .community-brand-panel { align-items: stretch; background: var(--navy); display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, .62fr); overflow: hidden; padding-left: clamp(2rem, 7vw, 7rem); }
 .community-logo-wrap { align-items: flex-start; display: flex; flex-direction: column; justify-content: center; padding: 2rem 2rem 2rem 0; }
 .community-logo { background: var(--logo-surface); display: block; height: auto; max-width: min(18rem, 100%); padding: .75rem; width: 100%; }
-.community-logo-wrap p { color: color-mix(in srgb, var(--surface) 78%, transparent); font-size: 1rem; margin: 1.35rem 0 0; }
+.community-logo-wrap p { color: var(--on-brand); font-size: 1rem; margin: 1.35rem 0 0; }
 .community-product-frame { background: var(--surface); min-height: 0; overflow: hidden; position: relative; }
 .community-product-frame img { object-fit: cover; object-position: center; }
 .community-intro { background: var(--surface); margin-left: auto; margin-top: clamp(-3rem, -6vw, -5rem); max-width: 32rem; padding: clamp(2rem, 4vw, 4rem); position: relative; }
@@ -356,7 +357,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (prefers-color-scheme: dark) {
-  :root { --ink: #f2f4fb; --navy: #c5d2ff; --canvas: #111829; --surface: #192238; --tint: #202d4a; --text-secondary: #d2daea; --text-tertiary: #c1cbdd; --muted: var(--text-secondary); --line: #34415b; --success: #7be0a5; --danger: #ffb4ab; --danger-surface: #4e1a18; }
+  :root { --ink: #f2f4fb; --navy: #c5d2ff; --canvas: #111829; --surface: #192238; --tint: #202d4a; --text-secondary: #e0e7f3; --text-tertiary: #cbd6e6; --muted: var(--text-secondary); --line: #45536f; --success: #7be0a5; --danger: #ffb4ab; --danger-surface: #4e1a18; --logo-surface: #f2f4fb; --on-brand: #111829; }
   .announcement, .button-primary { background: #0c1120; }
   .button-primary:hover, .button-secondary:hover { background: #263c77; }
   .button-secondary, .community-intro { background: var(--surface); }
