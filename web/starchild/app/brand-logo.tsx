@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 type BrandLogoProps = {
   className?: string;
   decorative?: boolean;
@@ -15,4 +17,3 @@ export default function BrandLogo({ className = "brand-logo", decorative = true 
     />
   );
 }
-import Image from "next/image";

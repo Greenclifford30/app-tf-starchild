@@ -16,6 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Starchild Clothing | Everyday orbit",
   description: "Thoughtful clothing for an everyday orbit.",
+  icons: {
+    icon: [{ url: "/Starchild_logo_transparent.svg", type: "image/svg+xml" }],
+    shortcut: ["/Starchild_logo_transparent.svg"],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
