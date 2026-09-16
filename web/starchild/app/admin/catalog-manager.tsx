@@ -129,8 +129,12 @@ export default function CatalogManager() {
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const result = await readJson(await fetch("/api/admin/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(challengeSession ? { action: "complete-new-password", email, password, newPassword, session: challengeSession } : { action: "sign-in", email, password }) })) as { challenge?: string; session?: string };
+      const result = await readJson(await fetch("/api/admin/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(challengeSession ? { action: "complete-new-password", email, password, newPassword, session: challengeSession } : { action: "sign-in", email, password }) })) as { challenge?: string; session?: string; groups?: string[] };
       if (result.challenge === "NEW_PASSWORD_REQUIRED" && result.session) { setChallengeSession(result.session); setNewPassword(""); return; }
+      if (!result.groups?.includes("starchild-admin")) {
+        setError(`Cognito signed in successfully, but this token does not include the starchild-admin group. Token groups: ${result.groups?.length ? result.groups.join(", ") : "none"}. Add this user to the exact group in the same user pool, then sign in again.`);
+        return;
+      }
       setPassword(""); setNewPassword(""); setChallengeSession(null); await loadProducts(true);
     }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to sign in."); }

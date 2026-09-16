@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import { ADMIN_TOKEN_COOKIE } from "@/app/admin/catalog-api";
 
+function tokenGroups(token: string): string[] {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return [];
+    const decoded = JSON.parse(Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8"));
+    const groups = decoded["cognito:groups"];
+    return Array.isArray(groups) ? groups.filter((group): group is string => typeof group === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function POST(request: Request) {
   const { action = "sign-in", email, password, newPassword, session, code } = await request.json().catch(() => ({}));
   if (typeof email !== "string" || (action === "sign-in" && typeof password !== "string")) {
@@ -69,7 +81,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: errorMessage }, { status: 401 });
   }
 
-  const result = NextResponse.json({ ok: true });
+  const result = NextResponse.json({ ok: true, groups: tokenGroups(token) });
   result.cookies.set(ADMIN_TOKEN_COOKIE, token, {
     httpOnly: true,
     maxAge: payload.AuthenticationResult.ExpiresIn ?? 3600,
