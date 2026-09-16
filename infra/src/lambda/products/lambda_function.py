@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
@@ -45,7 +46,14 @@ def _response(status, payload, origin=None):
     headers = {"content-type": "application/json", "cache-control": "no-store"}
     if origin in ALLOWED_ORIGINS:
         headers.update({"access-control-allow-origin": origin, "vary": "Origin"})
-    return {"statusCode": status, "headers": headers, "body": json.dumps(payload)}
+    return {"statusCode": status, "headers": headers, "body": json.dumps(payload, default=_json_default)}
+
+
+def _json_default(value):
+    """Convert DynamoDB numeric values to their native JSON equivalents."""
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def _origin(event):

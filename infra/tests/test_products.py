@@ -3,6 +3,7 @@ import json
 import os
 import unittest
 from copy import deepcopy
+from decimal import Decimal
 from pathlib import Path
 
 from botocore.exceptions import ClientError
@@ -87,6 +88,19 @@ class ProductHandlerTests(unittest.TestCase):
         products_lambda.lambda_handler(event("DELETE /products/{slug}", slug="test-tee", admin=True), None)
         response = products_lambda.lambda_handler(event("GET /products"), None)
         self.assertEqual(json.loads(response["body"])["products"], [])
+
+    def test_public_read_serializes_dynamodb_decimal_prices_as_integer_cents(self):
+        item = products_lambda._product(payload())
+        item["price_cents"] = Decimal("3800")
+        item["sort_order"] = Decimal("1")
+        self.table.items[item["slug"]] = item
+
+        response = products_lambda.lambda_handler(event("GET /products"), None)
+
+        self.assertEqual(response["statusCode"], 200)
+        product = json.loads(response["body"])["products"][0]
+        self.assertEqual(product["priceCents"], 3800)
+        self.assertIsInstance(product["priceCents"], int)
 
     def test_admin_required_for_writes(self):
         response = products_lambda.lambda_handler(event("POST /products", payload()), None)
