@@ -18,7 +18,6 @@ export default async function Home() {
   const products = await getProducts();
   const featuredProducts = products.filter((product) => product.featured);
   const loveInMotion = products.find((product) => product.slug === "love-in-motion");
-  const callUntoHim = products.find((product) => product.slug === "call-unto-him-longsleeve");
   const juneteenth = products.find((product) => product.slug === "starchild-juneteenth-piece");
   return (
     <div className="site-shell">
@@ -46,7 +45,7 @@ export default async function Home() {
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero-copy">
             <p className="eyebrow">The late summer edit</p>
-            <h1 id="hero-title">Clothes for the way you move.</h1>
+            <h1 id="hero-title">TRIALS MADE THE STARCHILD</h1>
             <p className="hero-summary">
               Everyday pieces with a clearer point of view, designed to stay in rotation.
             </p>
@@ -126,8 +125,8 @@ export default async function Home() {
 
           <div className="story-media media-frame">
             <Image
-              src={callUntoHim?.image ?? "/images/starchild-knit-editorial.png"}
-              alt={callUntoHim?.alt ?? "Starchild clothing"}
+              src="/products/Starchild-05.JPG"
+              alt="Two people wearing Starchild shirts in front of blue lockers"
               fill
               sizes="(max-width: 767px) 100vw, 42vw"
             />
