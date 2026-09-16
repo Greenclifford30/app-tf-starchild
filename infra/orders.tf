@@ -1,11 +1,7 @@
 resource "aws_dynamodb_table" "order_requests" {
   name         = "${local.name_prefix}-order-requests"
   billing_mode = "PAY_PER_REQUEST"
-
-  key_schema {
-    attribute_name = "submission_id"
-    key_type       = "HASH"
-  }
+  hash_key     = "submission_id"
 
   attribute {
     name = "submission_id"

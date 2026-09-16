@@ -1,11 +1,7 @@
 resource "aws_dynamodb_table" "products" {
   name         = "${local.name_prefix}-products"
   billing_mode = "PAY_PER_REQUEST"
-
-  key_schema {
-    attribute_name = "slug"
-    key_type       = "HASH"
-  }
+  hash_key     = "slug"
 
   attribute {
     name = "slug"
@@ -23,16 +19,8 @@ resource "aws_dynamodb_table" "products" {
   global_secondary_index {
     name            = "catalog"
     projection_type = "ALL"
-
-    key_schema {
-      attribute_name = "catalog_status"
-      key_type       = "HASH"
-    }
-
-    key_schema {
-      attribute_name = "catalog_sort"
-      key_type       = "RANGE"
-    }
+    hash_key        = "catalog_status"
+    range_key       = "catalog_sort"
   }
 
   point_in_time_recovery {
