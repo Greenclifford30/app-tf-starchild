@@ -40,19 +40,26 @@ export default function CatalogManager() {
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [challengeSession, setChallengeSession] = useState<string | null>(null);
 
   const activeProducts = useMemo(() => products.filter((product) => product.status === "ACTIVE"), [products]);
   const archivedProducts = useMemo(() => products.filter((product) => product.status === "ARCHIVED"), [products]);
   const selectedProduct = useMemo(() => products.find((product) => product.slug === selectedSlug) ?? null, [products, selectedSlug]);
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (afterSignIn = false) => {
     setError("");
     const response = await fetch("/api/admin/products", { cache: "no-store" });
-    if (response.status === 401 || response.status === 403) { setMode("signin"); return; }
+    if (response.status === 401 || response.status === 403) {
+      setMode("signin");
+      if (afterSignIn) setError("Cognito accepted the sign-in, but the catalog API rejected the token. Verify that the pool ID and app client ID in Amplify match the deployed API, then sign in again.");
+      return false;
+    }
     try {
       const payload = await readJson(response) as { products: CatalogProduct[] };
       setProducts(payload.products);
       setMode("ready");
+      return true;
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load the catalog."); setMode("ready"); }
   }, []);
 
@@ -118,7 +125,11 @@ export default function CatalogManager() {
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
-    try { await readJson(await fetch("/api/admin/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) })); setPassword(""); await loadProducts(); }
+    try {
+      const result = await readJson(await fetch("/api/admin/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(challengeSession ? { email, password, newPassword, session: challengeSession } : { email, password }) })) as { challenge?: string; session?: string };
+      if (result.challenge === "NEW_PASSWORD_REQUIRED" && result.session) { setChallengeSession(result.session); setNewPassword(""); return; }
+      setPassword(""); setNewPassword(""); setChallengeSession(null); await loadProducts(true);
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to sign in."); }
     finally { setBusy(false); }
   }
@@ -126,7 +137,7 @@ export default function CatalogManager() {
   async function signOut() { await fetch("/api/admin/session", { method: "DELETE" }); beginNew(); setProducts([]); setMode("signin"); }
 
   if (mode === "loading") return <main className="catalog-loading" aria-busy="true"><div /><div /><div /></main>;
-  if (mode === "signin") return <main className="catalog-login"><section><p className="catalog-kicker">Starchild / private</p><h1>Catalog manager</h1><p>Sign in with the administrator account to update the collection.</p>{error ? <p className="catalog-form-error" role="alert">{error}</p> : null}<form onSubmit={signIn}><label>Email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label><button className="button button-primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button></form></section></main>;
+  if (mode === "signin") return <main className="catalog-login"><section><p className="catalog-kicker">Starchild / private</p><h1>Catalog manager</h1><p>{challengeSession ? "This account needs a permanent password before it can access the catalog." : "Sign in with the administrator account to update the collection."}</p>{error ? <p className="catalog-form-error" role="alert">{error}</p> : null}<form onSubmit={signIn}><label>Email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={Boolean(challengeSession)} /></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{challengeSession ? <label>New password<input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} required /></label> : null}<button className="button button-primary" disabled={busy}>{busy ? "Signing in…" : challengeSession ? "Set password" : "Sign in"}</button></form></section></main>;
 
   return <main className="catalog-page">
     <header className="catalog-header"><div><p className="catalog-kicker">Starchild / administration</p><h1>Catalog</h1></div><div className="catalog-header-actions"><a className="text-link" href="/shop" target="_blank" rel="noreferrer">View store</a><button className="catalog-quiet-button" type="button" onClick={() => void signOut()}>Sign out</button></div></header>
