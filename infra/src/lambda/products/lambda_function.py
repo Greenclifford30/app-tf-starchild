@@ -64,7 +64,19 @@ def _origin(event):
 def _is_admin(event):
     claims = ((event.get("requestContext") or {}).get("authorizer") or {}).get("jwt", {}).get("claims", {})
     groups = claims.get("cognito:groups", "")
-    return ADMIN_GROUP in (groups if isinstance(groups, list) else groups.split(","))
+    if isinstance(groups, (list, tuple, set)):
+        return ADMIN_GROUP in groups
+    if isinstance(groups, str):
+        # HTTP API JWT claims are commonly strings, including JSON-encoded
+        # arrays such as '["starchild-admin"]' for Cognito group claims.
+        try:
+            parsed_groups = json.loads(groups)
+        except json.JSONDecodeError:
+            parsed_groups = None
+        if isinstance(parsed_groups, list):
+            return ADMIN_GROUP in parsed_groups
+        return ADMIN_GROUP in (group.strip() for group in groups.split(","))
+    return False
 
 
 def _body(event):

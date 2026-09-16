@@ -106,6 +106,12 @@ class ProductHandlerTests(unittest.TestCase):
         response = products_lambda.lambda_handler(event("POST /products", payload()), None)
         self.assertEqual(response["statusCode"], 403)
 
+    def test_json_encoded_cognito_group_claim_is_authorized(self):
+        request = event("POST /products", payload())
+        request["requestContext"] = {"authorizer": {"jwt": {"claims": {"cognito:groups": '["starchild-admin"]'}}}}
+        response = products_lambda.lambda_handler(request, None)
+        self.assertEqual(response["statusCode"], 201)
+
     def test_creates_and_returns_cloudfront_image_url(self):
         response = products_lambda.lambda_handler(event("POST /products", payload(), admin=True), None)
         body = json.loads(response["body"])
