@@ -42,6 +42,9 @@ export default function CatalogManager() {
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [challengeSession, setChallengeSession] = useState<string | null>(null);
+  const [resetMode, setResetMode] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [resetNotice, setResetNotice] = useState("");
 
   const activeProducts = useMemo(() => products.filter((product) => product.status === "ACTIVE"), [products]);
   const archivedProducts = useMemo(() => products.filter((product) => product.status === "ARCHIVED"), [products]);
@@ -126,7 +129,7 @@ export default function CatalogManager() {
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const result = await readJson(await fetch("/api/admin/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(challengeSession ? { email, password, newPassword, session: challengeSession } : { email, password }) })) as { challenge?: string; session?: string };
+      const result = await readJson(await fetch("/api/admin/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(challengeSession ? { action: "complete-new-password", email, password, newPassword, session: challengeSession } : { action: "sign-in", email, password }) })) as { challenge?: string; session?: string };
       if (result.challenge === "NEW_PASSWORD_REQUIRED" && result.session) { setChallengeSession(result.session); setNewPassword(""); return; }
       setPassword(""); setNewPassword(""); setChallengeSession(null); await loadProducts(true);
     }
@@ -134,10 +137,28 @@ export default function CatalogManager() {
     finally { setBusy(false); }
   }
 
+  async function confirmReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError(""); setResetNotice("");
+    try {
+      await readJson(await fetch("/api/admin/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "confirm-reset", email, code: resetCode, newPassword }) }));
+      setPassword(""); setNewPassword(""); setResetCode(""); setResetMode(false); setResetNotice("Password updated. Sign in with your new password.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to reset password."); }
+    finally { setBusy(false); }
+  }
+
+  async function requestResetCode() {
+    setBusy(true); setError(""); setResetNotice("");
+    try {
+      await readJson(await fetch("/api/admin/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "request-reset", email }) }));
+      setResetNotice("A new reset code has been sent if this account is eligible.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to request a reset code."); }
+    finally { setBusy(false); }
+  }
+
   async function signOut() { await fetch("/api/admin/session", { method: "DELETE" }); beginNew(); setProducts([]); setMode("signin"); }
 
   if (mode === "loading") return <main className="catalog-loading" aria-busy="true"><div /><div /><div /></main>;
-  if (mode === "signin") return <main className="catalog-login"><section><p className="catalog-kicker">Starchild / private</p><h1>Catalog manager</h1><p>{challengeSession ? "This account needs a permanent password before it can access the catalog." : "Sign in with the administrator account to update the collection."}</p>{error ? <p className="catalog-form-error" role="alert">{error}</p> : null}<form onSubmit={signIn}><label>Email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={Boolean(challengeSession)} /></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{challengeSession ? <label>New password<input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} required /></label> : null}<button className="button button-primary" disabled={busy}>{busy ? "Signing in…" : challengeSession ? "Set password" : "Sign in"}</button></form></section></main>;
+  if (mode === "signin") return <main className="catalog-login"><section><p className="catalog-kicker">Starchild / private</p><h1>Catalog manager</h1><p>{resetMode ? "Enter the password-reset code sent by Cognito and choose a new password." : challengeSession ? "This account needs a permanent password before it can access the catalog." : "Sign in with the administrator account to update the collection."}</p>{resetNotice ? <p className="catalog-notice" role="status">{resetNotice}</p> : null}{error ? <p className="catalog-form-error" role="alert">{error}</p> : null}{resetMode ? <form onSubmit={confirmReset}><label>Email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>Reset code<input inputMode="numeric" autoComplete="one-time-code" value={resetCode} onChange={(event) => setResetCode(event.target.value)} required /></label><label>New password<input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} required /></label><button className="button button-primary" disabled={busy}>{busy ? "Updating…" : "Update password"}</button><button className="catalog-quiet-button" type="button" onClick={() => { setResetMode(false); setError(""); }}>Back to sign in</button></form> : <form onSubmit={signIn}><label>Email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={Boolean(challengeSession)} /></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{challengeSession ? <label>New password<input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} required /></label> : null}<button className="button button-primary" disabled={busy}>{busy ? "Signing in…" : challengeSession ? "Set password" : "Sign in"}</button>{!challengeSession ? <button className="catalog-quiet-button" type="button" onClick={() => { setResetMode(true); setError(""); }}>Use a reset code</button> : null}</form>} {resetMode ? <button className="catalog-quiet-button catalog-request-code" type="button" disabled={busy || !email} onClick={() => void requestResetCode()}>Send a new code</button> : null}</section></main>;
 
   return <main className="catalog-page">
     <header className="catalog-header"><div><p className="catalog-kicker">Starchild / administration</p><h1>Catalog</h1></div><div className="catalog-header-actions"><a className="text-link" href="/shop" target="_blank" rel="noreferrer">View store</a><button className="catalog-quiet-button" type="button" onClick={() => void signOut()}>Sign out</button></div></header>
