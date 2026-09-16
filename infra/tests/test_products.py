@@ -112,6 +112,12 @@ class ProductHandlerTests(unittest.TestCase):
         response = products_lambda.lambda_handler(request, None)
         self.assertEqual(response["statusCode"], 201)
 
+    def test_bracketed_cognito_group_claim_is_authorized(self):
+        request = event("POST /products", payload())
+        request["requestContext"] = {"authorizer": {"jwt": {"claims": {"cognito:groups": "[starchild-admin]"}}}}
+        response = products_lambda.lambda_handler(request, None)
+        self.assertEqual(response["statusCode"], 201)
+
     def test_authorization_context_reports_the_claim_received_by_lambda(self):
         request = event("GET /admin/auth-context")
         request["requestContext"] = {"authorizer": {"jwt": {"claims": {"cognito:groups": '["starchild-admin"]', "token_use": "id"}}}}

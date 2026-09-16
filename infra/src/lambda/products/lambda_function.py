@@ -75,7 +75,13 @@ def _is_admin(event):
             parsed_groups = None
         if isinstance(parsed_groups, list):
             return ADMIN_GROUP in parsed_groups
-        return ADMIN_GROUP in (group.strip() for group in groups.split(","))
+        # Some HTTP API payloads serialize a single array claim as
+        # "[starchild-admin]" rather than valid JSON. Normalize the brackets
+        # before checking comma-separated group names.
+        normalized_groups = groups.strip()
+        if normalized_groups.startswith("[") and normalized_groups.endswith("]"):
+            normalized_groups = normalized_groups[1:-1]
+        return ADMIN_GROUP in (group.strip().strip('"') for group in normalized_groups.split(","))
     return False
 
 
