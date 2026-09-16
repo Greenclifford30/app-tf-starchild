@@ -10,6 +10,8 @@ This Terraform root deploys the order-request backend and product catalog:
 - DynamoDB-backed public product catalog and admin CRUD API
 - Cognito admin identity, private S3 product media, and CloudFront delivery
 
+Terraform is split by responsibility: `main.tf` contains provider configuration and shared locals; `orders.tf` contains orders/API Gateway; `catalog.tf` contains the product table; `products_api.tf` contains the product Lambda and routes; `media.tf` contains S3/CloudFront; and `identity.tf` contains Cognito administration.
+
 ## Deploy
 
 Create an untracked `terraform.tfvars` from `terraform.tfvars.example`. Set the order-notification email and the exact Amplify/custom-domain origins, then run:
