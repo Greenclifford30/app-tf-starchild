@@ -9,6 +9,10 @@ applications:
             - npm ci
         build:
           commands:
+            # Amplify build variables are not automatically available to the
+            # Next.js SSR runtime. Persist the non-secret API endpoints in the
+            # monorepo app's production env file before building.
+            - if [ -d web/starchild ]; then env | grep -e PRODUCTS_API_URL -e NEXT_PUBLIC_ORDERS_API_URL >> web/starchild/.env.production; else env | grep -e PRODUCTS_API_URL -e NEXT_PUBLIC_ORDERS_API_URL >> .env.production; fi
             - npm run build
       artifacts:
         # Next.js SSR output; product detail routes are generated on demand.
