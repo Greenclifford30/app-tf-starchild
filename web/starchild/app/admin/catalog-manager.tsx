@@ -55,7 +55,16 @@ export default function CatalogManager() {
     const response = await fetch("/api/admin/products", { cache: "no-store" });
     if (response.status === 401 || response.status === 403) {
       setMode("signin");
-      if (afterSignIn) setError("Cognito accepted the sign-in, but the catalog API rejected the token. Verify that the pool ID and app client ID in Amplify match the deployed API, then sign in again.");
+      if (afterSignIn) {
+        const contextResponse = await fetch("/api/admin/auth-context", { cache: "no-store" });
+        const context = await contextResponse.json().catch(() => null) as { isAdmin?: boolean; groups?: unknown; groupsType?: string } | null;
+        if (contextResponse.ok && context) {
+          const groups = context.groups === null || context.groups === undefined ? "none" : JSON.stringify(context.groups);
+          setError(`The catalog Lambda received group claim ${groups} (${context.groupsType ?? "unknown"}) and evaluated administrator access as ${context.isAdmin ? "allowed" : "denied"}.`);
+        } else {
+          setError("Cognito accepted the sign-in, but the catalog API rejected the token. Verify that the pool ID and app client ID in Amplify match the deployed API, then sign in again.");
+        }
+      }
       return false;
     }
     try {

@@ -90,6 +90,14 @@ resource "aws_apigatewayv2_route" "admin_products" {
   authorizer_id = aws_apigatewayv2_authorizer.product_admin.id
 }
 
+resource "aws_apigatewayv2_route" "admin_auth_context" {
+  api_id             = aws_apigatewayv2_api.orders.id
+  route_key          = "GET /admin/auth-context"
+  target             = "integrations/${aws_apigatewayv2_integration.products.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.product_admin.id
+}
+
 resource "aws_apigatewayv2_route" "create_product" {
   api_id             = aws_apigatewayv2_api.orders.id
   route_key          = "POST /products"

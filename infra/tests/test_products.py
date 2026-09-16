@@ -112,6 +112,14 @@ class ProductHandlerTests(unittest.TestCase):
         response = products_lambda.lambda_handler(request, None)
         self.assertEqual(response["statusCode"], 201)
 
+    def test_authorization_context_reports_the_claim_received_by_lambda(self):
+        request = event("GET /admin/auth-context")
+        request["requestContext"] = {"authorizer": {"jwt": {"claims": {"cognito:groups": '["starchild-admin"]', "token_use": "id"}}}}
+        response = products_lambda.lambda_handler(request, None)
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(json.loads(response["body"])["isAdmin"], True)
+        self.assertEqual(json.loads(response["body"])["groupsType"], "str")
+
     def test_creates_and_returns_cloudfront_image_url(self):
         response = products_lambda.lambda_handler(event("POST /products", payload(), admin=True), None)
         body = json.loads(response["body"])

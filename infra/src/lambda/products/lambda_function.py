@@ -79,6 +79,19 @@ def _is_admin(event):
     return False
 
 
+def _authorization_context(event):
+    claims = ((event.get("requestContext") or {}).get("authorizer") or {}).get("jwt", {}).get("claims", {})
+    groups = claims.get("cognito:groups")
+    return {
+        "isAdmin": _is_admin(event),
+        "groups": groups if groups is not None else None,
+        "groupsType": type(groups).__name__ if groups is not None else "missing",
+        "tokenUse": claims.get("token_use"),
+        "clientId": claims.get("client_id") or claims.get("aud"),
+        "issuer": claims.get("iss"),
+    }
+
+
 def _body(event):
     value = event.get("body") or ""
     if event.get("isBase64Encoded"):
@@ -187,7 +200,7 @@ def lambda_handler(event, _context):
     if origin and origin not in ALLOWED_ORIGINS:
         return _response(403, {"message": "This origin is not allowed."})
     route, slug = _route(event)
-    admin_route = route.startswith("GET /admin") or route.startswith("POST ") or route.startswith("PUT ") or route.startswith("DELETE ")
+    admin_route = (route.startswith("GET /admin") and route != "GET /admin/auth-context") or route.startswith("POST ") or route.startswith("PUT ") or route.startswith("DELETE ")
     if admin_route and not _is_admin(event):
         return _response(403, {"message": "Administrator access is required."}, origin)
     table = _table()
@@ -200,6 +213,8 @@ def lambda_handler(event, _context):
             if not item or item["catalog_status"] != "ACTIVE":
                 return _response(404, {"message": "Product not found."}, origin)
             return _response(200, {"product": _public_product(item)}, origin)
+        if route == "GET /admin/auth-context":
+            return _response(200, _authorization_context(event), origin)
         if route == "GET /admin/products":
             result = table.scan()
             return _response(200, {"products": [_admin_product(item) for item in sorted(result.get("Items", []), key=lambda item: (item["catalog_status"], item["catalog_sort"]))]}, origin)
