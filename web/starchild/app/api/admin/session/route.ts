@@ -51,7 +51,9 @@ export async function POST(request: Request) {
   if (response.ok && payload?.ChallengeName === "NEW_PASSWORD_REQUIRED" && typeof payload?.Session === "string") {
     return NextResponse.json({ challenge: "NEW_PASSWORD_REQUIRED", session: payload.Session });
   }
-  const token = payload?.AuthenticationResult?.AccessToken;
+  // The HTTP API authorizer's audience is the Cognito app client ID. An ID
+  // token carries that value in its `aud` claim and also includes group claims.
+  const token = payload?.AuthenticationResult?.IdToken;
   if (!response.ok || typeof token !== "string") {
     const errorType = typeof payload?.__type === "string" ? payload.__type.split("#").pop() ?? "" : "";
     const errorMessages: Record<string, string> = {
