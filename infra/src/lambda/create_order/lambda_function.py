@@ -15,6 +15,7 @@ LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
 
 ORDERS_TABLE = os.environ.get("ORDERS_TABLE", "")
+PRODUCTS_TABLE = os.environ.get("PRODUCTS_TABLE", "")
 NOTIFICATION_TOPIC_ARN = os.environ.get("NOTIFICATION_TOPIC_ARN", "")
 ALLOWED_ORIGINS = {
     origin.strip()
@@ -26,51 +27,6 @@ MAX_BODY_BYTES = 32_000
 MAX_ITEMS = 20
 MAX_QUANTITY = 10
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-CATALOG = {
-    "stars-dont-see-tears": {
-        "name": "Stars Don't See Tears",
-        "price_cents": 3800,
-        "colors": {"White"},
-        "sizes": {"S", "M", "L", "XL", "2XL"},
-    },
-    "starchild-juneteenth-piece": {
-        "name": "Starchild Juneteenth Piece",
-        "price_cents": 4200,
-        "colors": {"Black"},
-        "sizes": {"S", "M", "L", "XL", "2XL"},
-    },
-    "world-is-in-your-hands": {
-        "name": "The World Is in Your Hands",
-        "price_cents": 4800,
-        "colors": {"White"},
-        "sizes": {"S", "M", "L", "XL", "2XL"},
-    },
-    "starchild-smiley-tee": {
-        "name": "Cropped Starchild Smiley Face Tee",
-        "price_cents": 3600,
-        "colors": {"White"},
-        "sizes": {"XS", "S", "M", "L", "XL"},
-    },
-    "divine-direction": {
-        "name": "Divine Direction",
-        "price_cents": 3800,
-        "colors": {"White"},
-        "sizes": {"S", "M", "L", "XL", "2XL"},
-    },
-    "love-in-motion": {
-        "name": "Love in Motion",
-        "price_cents": 6800,
-        "colors": {"Espresso"},
-        "sizes": {"S", "M", "L", "XL", "2XL"},
-    },
-    "call-unto-him-longsleeve": {
-        "name": "Call Unto Him Starchild Longsleeve",
-        "price_cents": 4800,
-        "colors": {"White"},
-        "sizes": {"S", "M", "L", "XL", "2XL"},
-    },
-}
 
 _DYNAMODB = None
 _SNS = None
@@ -85,6 +41,13 @@ def _orders_table():
     if _DYNAMODB is None:
         _DYNAMODB = boto3.resource("dynamodb")
     return _DYNAMODB.Table(ORDERS_TABLE)
+
+
+def _products_table():
+    global _DYNAMODB
+    if _DYNAMODB is None:
+        _DYNAMODB = boto3.resource("dynamodb")
+    return _DYNAMODB.Table(PRODUCTS_TABLE)
 
 
 def _sns_client():
@@ -196,6 +159,8 @@ def _validate_items(payload):
         raise RequestError("The order contains too many items.")
 
     combined = {}
+    products = {}
+    table = _products_table()
     for requested in requested_items:
         if not isinstance(requested, dict):
             raise RequestError("Each item must be an object.")
@@ -204,9 +169,14 @@ def _validate_items(payload):
         color = requested.get("color")
         size = requested.get("size")
         quantity = requested.get("quantity")
-        product = CATALOG.get(slug)
-
+        if not isinstance(slug, str):
+            raise RequestError("An item in your bag is no longer available.")
+        product = products.get(slug)
         if product is None:
+            product = table.get_item(Key={"slug": slug}, ConsistentRead=True).get("Item")
+            products[slug] = product
+
+        if product is None or product.get("catalog_status") != "ACTIVE":
             raise RequestError("An item in your bag is no longer available.")
         if color not in product["colors"] or size not in product["sizes"]:
             raise RequestError(f"The selected {product['name']} variant is unavailable.")
@@ -220,7 +190,7 @@ def _validate_items(payload):
 
     items = []
     for (slug, color, size), quantity in combined.items():
-        product = CATALOG[slug]
+        product = products[slug]
         unit_price_cents = product["price_cents"]
         items.append(
             {

@@ -3,22 +3,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import BrandLogo from "../../brand-logo";
-import { getProduct, products } from "../../products";
+import { getProduct } from "../../products";
 import PurchasePanel from "./purchase-panel";
+
+export const dynamic = "force-dynamic";
 
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export const dynamicParams = false;
-
-export function generateStaticParams() {
-  return products.map(({ slug }) => ({ slug }));
-}
-
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = getProduct(slug);
+  const product = await getProduct(slug);
 
   if (!product) {
     return { title: "Product not found | Starchild Clothing" };
@@ -32,7 +28,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = getProduct(slug);
+  const product = await getProduct(slug);
 
   if (!product) {
     notFound();
@@ -70,7 +66,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             name={product.name}
             image={product.image}
             alt={product.alt}
-            price={product.price}
+            price={product.priceCents / 100}
             colors={product.colors}
             sizes={product.sizes}
             availability={product.availability}

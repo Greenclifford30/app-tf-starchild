@@ -8,6 +8,7 @@ from pathlib import Path
 from botocore.exceptions import ClientError
 
 os.environ.setdefault("ORDERS_TABLE", "orders-test")
+os.environ.setdefault("PRODUCTS_TABLE", "products-test")
 os.environ.setdefault("NOTIFICATION_TOPIC_ARN", "arn:aws:sns:us-east-1:123456789012:orders-test")
 os.environ.setdefault("ALLOWED_ORIGINS", "https://main.example.amplifyapp.com,http://localhost:3000")
 sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "lambda" / "create_order"))
@@ -43,13 +44,31 @@ class FakeTable:
         return {}
 
 
+class FakeProductsTable:
+    def __init__(self):
+        self.items = {
+            "love-in-motion": {
+                "slug": "love-in-motion", "name": "Love in Motion", "price_cents": 6800,
+                "colors": ["Espresso"], "sizes": ["S", "M", "L", "XL", "2XL"], "catalog_status": "ACTIVE",
+            }
+        }
+
+    def get_item(self, Key, ConsistentRead):
+        assert ConsistentRead is True
+        item = self.items.get(Key["slug"])
+        return {"Item": deepcopy(item)} if item else {}
+
+
 class FakeDynamoDB:
-    def __init__(self, table):
-        self.table = table
+    def __init__(self, order_table, products_table):
+        self.order_table = order_table
+        self.products_table = products_table
 
     def Table(self, name):
-        assert name == "orders-test"
-        return self.table
+        if name == "orders-test":
+            return self.order_table
+        assert name == "products-test"
+        return self.products_table
 
 
 class FakeSns:
@@ -113,8 +132,9 @@ def valid_event(**payload_overrides):
 class OrderHandlerTests(unittest.TestCase):
     def setUp(self):
         self.table = FakeTable()
+        self.products = FakeProductsTable()
         self.sns = FakeSns()
-        lambda_function._DYNAMODB = FakeDynamoDB(self.table)
+        lambda_function._DYNAMODB = FakeDynamoDB(self.table, self.products)
         lambda_function._SNS = self.sns
 
     def test_valid_order_is_repriced_stored_and_notified(self):
@@ -147,6 +167,12 @@ class OrderHandlerTests(unittest.TestCase):
         }])
         response = lambda_function.lambda_handler(event, None)
 
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(self.table.items, {})
+
+    def test_archived_product_is_rejected(self):
+        self.products.items["love-in-motion"]["catalog_status"] = "ARCHIVED"
+        response = lambda_function.lambda_handler(valid_event(), None)
         self.assertEqual(response["statusCode"], 400)
         self.assertEqual(self.table.items, {})
 

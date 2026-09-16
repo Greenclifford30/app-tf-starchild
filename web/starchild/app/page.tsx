@@ -3,7 +3,9 @@ import Link from "next/link";
 import BagLink from "./bag-link";
 import BrandLogo from "./brand-logo";
 import MobileNavigation from "./mobile-navigation";
-import { featuredProducts } from "./products";
+import { getProducts } from "./products";
+
+export const dynamic = "force-dynamic";
 
 const primaryNavigation = [
   { href: "/shop", label: "Shop" },
@@ -12,7 +14,12 @@ const primaryNavigation = [
   { href: "#community", label: "Community" },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const products = await getProducts();
+  const featuredProducts = products.filter((product) => product.featured);
+  const loveInMotion = products.find((product) => product.slug === "love-in-motion");
+  const callUntoHim = products.find((product) => product.slug === "call-unto-him-longsleeve");
+  const juneteenth = products.find((product) => product.slug === "starchild-juneteenth-piece");
   return (
     <div className="site-shell">
       <div className="announcement">Complimentary standard shipping on orders over $100.</div>
@@ -50,8 +57,8 @@ export default function Home() {
 
           <div className="hero-media">
             <Image
-              src="/products/love_in_motion_hoodie.PNG"
-              alt="Black Straight to the Heart hoodie with a cupid graphic"
+              src={loveInMotion?.image ?? "/images/starchild-hero-campaign.png"}
+              alt={loveInMotion?.alt ?? "Starchild campaign"}
               fill
               priority
               sizes="(max-width: 767px) 100vw, 58vw"
@@ -119,8 +126,8 @@ export default function Home() {
 
           <div className="story-media media-frame">
             <Image
-              src="/products/call_unto_him_crewneck.png"
-              alt="Call Unto Him Starchild crewneck"
+              src={callUntoHim?.image ?? "/images/starchild-knit-editorial.png"}
+              alt={callUntoHim?.alt ?? "Starchild clothing"}
               fill
               sizes="(max-width: 767px) 100vw, 42vw"
             />
@@ -141,8 +148,8 @@ export default function Home() {
             </div>
             <div className="community-product-frame">
               <Image
-                src="/products/starchild_juneteenth_shirt.png"
-                alt="Starchild Juneteenth T-shirt"
+                src={juneteenth?.image ?? "/images/starchild-community-walk.png"}
+                alt={juneteenth?.alt ?? "Starchild community"}
                 fill
                 sizes="(max-width: 767px) 72vw, 36vw"
               />

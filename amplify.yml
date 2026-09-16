@@ -11,7 +11,8 @@ applications:
           commands:
             - npm run build
       artifacts:
-        baseDirectory: out
+        # Next.js SSR output; product detail routes are generated on demand.
+        baseDirectory: .next
         files:
           - '**/*'
       cache:

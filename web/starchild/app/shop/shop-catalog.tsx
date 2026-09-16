@@ -7,11 +7,11 @@ import type { Product } from "../products";
 
 type ShopCatalogProps = { products: Product[] };
 
-const categories = ["All pieces", "T-shirt", "Long sleeve", "Hoodie"] as const;
 const availability = ["All availability", "In stock", "Limited availability"] as const;
 
 export default function ShopCatalog({ products }: ShopCatalogProps) {
-  const [category, setCategory] = useState<(typeof categories)[number]>("All pieces");
+  const categories = useMemo(() => ["All pieces", ...Array.from(new Set(products.map((product) => product.category)))], [products]);
+  const [category, setCategory] = useState("All pieces");
   const [stockStatus, setStockStatus] = useState<(typeof availability)[number]>("All availability");
 
   const filteredProducts = useMemo(
@@ -56,7 +56,7 @@ export default function ShopCatalog({ products }: ShopCatalogProps) {
                   <p className="product-kind">{product.category}</p>
                   <h2><Link href={`/products/${product.slug}`}>{product.name}</Link></h2>
                 </div>
-                <p className="shop-product-price">${product.price.toFixed(2)}</p>
+                <p className="shop-product-price">${(product.priceCents / 100).toFixed(2)}</p>
               </div>
             </article>
           ))}

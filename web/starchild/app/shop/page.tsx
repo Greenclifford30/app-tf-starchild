@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { products } from "../products";
+import { getProducts } from "../products";
 import ShopCatalog from "./shop-catalog";
 import BagLink from "../bag-link";
 import BrandLogo from "../brand-logo";
 import MobileNavigation from "../mobile-navigation";
+
+export const dynamic = "force-dynamic";
 
 const shopNavigation = [
   { href: "/shop", label: "Shop all" },
@@ -18,7 +20,8 @@ export const metadata: Metadata = {
   description: "Explore every Starchild piece, made for the way you move.",
 };
 
-export default function ShopPage() {
+export default async function ShopPage() {
+  const products = await getProducts();
   return (
     <main className="shop-page">
       <div className="announcement">Complimentary standard shipping on orders over $100.</div>
