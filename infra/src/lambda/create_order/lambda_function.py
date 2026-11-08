@@ -282,10 +282,24 @@ def lambda_handler(event, _context):
             return _response(201, {"orderReference": fake_reference}, origin)
 
         submission_id = _validate_submission_id(payload.get("submissionId"))
+        # A previously saved submission remains retriable even if its catalog
+        # items have since been archived or their prices have changed.
+        table = _orders_table()
+        existing = table.get_item(Key={"submission_id": submission_id}, ConsistentRead=True).get("Item")
+        if existing:
+            if existing.get("notification_status") != "PUBLISHED" and not _publish_notification(table, existing):
+                return _response(503, {"message": "Your request was saved, but notification is delayed. Please retry to complete it."}, origin)
+            return _response(200, {"orderReference": existing["order_reference"],
+                "subtotal": float(Decimal(existing["subtotal_cents"]) / 100),
+                "shipping": float(Decimal(existing["shipping_cents"]) / 100),
+                "total": float(Decimal(existing["total_cents"]) / 100)}, origin)
         customer = _validate_customer(payload)
         items = _validate_items(payload)
     except RequestError as exc:
         return _response(400, {"message": str(exc)}, origin)
+    except (BotoCoreError, ClientError):
+        LOGGER.exception("Failed to check or validate order request")
+        return _response(503, {"message": "We could not verify your order request. Please try again."}, origin)
 
     now = datetime.now(timezone.utc)
     subtotal_cents = sum(item["line_total_cents"] for item in items)
@@ -294,6 +308,8 @@ def lambda_handler(event, _context):
         "submission_id": submission_id,
         "order_reference": f"SC-{now:%Y%m%d}-{secrets.token_hex(2).upper()}",
         "status": "REQUESTED",
+        "review_status": "PENDING",
+        "review_sort": f"{now.isoformat()}#{submission_id}",
         "notification_status": "PENDING",
         "created_at": now.isoformat(),
         "customer": customer,

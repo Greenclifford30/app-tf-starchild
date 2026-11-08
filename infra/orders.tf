@@ -8,6 +8,24 @@ resource "aws_dynamodb_table" "order_requests" {
     type = "S"
   }
 
+  attribute {
+    name = "review_status"
+    type = "S"
+  }
+
+  attribute {
+    name = "review_sort"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "review"
+    hash_key           = "review_status"
+    range_key          = "review_sort"
+    projection_type    = "INCLUDE"
+    non_key_attributes = ["order_reference", "created_at", "total_cents", "currency", "order_id"]
+  }
+
   point_in_time_recovery {
     enabled = true
   }
@@ -64,8 +82,8 @@ resource "aws_iam_role_policy" "order_lambda_data" {
         Resource = aws_dynamodb_table.order_requests.arn
       },
       {
-        Effect = "Allow"
-        Action = ["dynamodb:GetItem"]
+        Effect   = "Allow"
+        Action   = ["dynamodb:GetItem"]
         Resource = aws_dynamodb_table.products.arn
       },
       {

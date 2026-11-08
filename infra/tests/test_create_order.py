@@ -158,6 +158,14 @@ class OrderHandlerTests(unittest.TestCase):
         self.assertEqual(json.loads(first["body"])["orderReference"], json.loads(second["body"])["orderReference"])
         self.assertEqual(len(self.sns.messages), 1)
 
+    def test_retry_returns_original_even_after_product_is_archived(self):
+        first = lambda_function.lambda_handler(valid_event(), None)
+        self.products.items["love-in-motion"]["catalog_status"] = "ARCHIVED"
+        second = lambda_function.lambda_handler(valid_event(), None)
+        self.assertEqual(second["statusCode"], 200)
+        self.assertEqual(json.loads(first["body"])["orderReference"], json.loads(second["body"])["orderReference"])
+        self.assertEqual(len(self.sns.messages), 1)
+
     def test_invalid_variant_is_rejected(self):
         event = valid_event(items=[{
             "productSlug": "love-in-motion",
