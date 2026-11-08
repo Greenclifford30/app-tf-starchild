@@ -36,13 +36,33 @@ resource "aws_dynamodb_table" "order_requests" {
 }
 
 resource "aws_sns_topic" "order_requests" {
-  name = "${local.name_prefix}-order-requests"
+  count = var.retain_sns_notifications ? 1 : 0
+  name  = "${local.name_prefix}-order-requests"
 }
 
 resource "aws_sns_topic_subscription" "order_email" {
-  topic_arn = aws_sns_topic.order_requests.arn
+  count     = var.retain_sns_notifications ? 1 : 0
+  topic_arn = aws_sns_topic.order_requests[0].arn
   protocol  = "email"
   endpoint  = var.notification_email
+}
+
+moved {
+  from = aws_sns_topic.order_requests
+  to   = aws_sns_topic.order_requests[0]
+}
+
+moved {
+  from = aws_sns_topic_subscription.order_email
+  to   = aws_sns_topic_subscription.order_email[0]
+}
+
+resource "aws_ses_domain_identity" "notifications" {
+  domain = "starchildclo.com"
+}
+
+resource "aws_ses_domain_dkim" "notifications" {
+  domain = aws_ses_domain_identity.notifications.domain
 }
 
 resource "aws_iam_role" "order_lambda" {
@@ -71,7 +91,7 @@ resource "aws_iam_role_policy" "order_lambda_data" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Effect = "Allow"
         Action = [
@@ -88,10 +108,14 @@ resource "aws_iam_role_policy" "order_lambda_data" {
       },
       {
         Effect   = "Allow"
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.order_requests.arn
+        Action   = "ses:SendEmail"
+        Resource = aws_ses_domain_identity.notifications.arn
       }
-    ]
+      ], var.retain_sns_notifications ? [{
+        Effect   = "Allow"
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.order_requests[0].arn
+    }] : [])
   })
 }
 
@@ -121,9 +145,19 @@ resource "aws_lambda_function" "create_order" {
   environment {
     variables = {
       ALLOWED_ORIGINS        = join(",", local.cors_allowed_origins)
-      NOTIFICATION_TOPIC_ARN = aws_sns_topic.order_requests.arn
+      NOTIFICATION_TOPIC_ARN = var.retain_sns_notifications ? aws_sns_topic.order_requests[0].arn : ""
+      NOTIFICATION_TRANSPORT = var.notification_transport
+      NOTIFICATION_EMAIL     = var.notification_email
+      NOTIFICATION_FROM      = "Starchild <orders@starchildclo.com>"
       ORDERS_TABLE           = aws_dynamodb_table.order_requests.name
       PRODUCTS_TABLE         = aws_dynamodb_table.products.name
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.notification_transport != "sns" || var.retain_sns_notifications
+      error_message = "SNS resources must be retained while notification_transport is sns."
     }
   }
 

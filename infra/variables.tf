@@ -27,6 +27,23 @@ variable "notification_email" {
   }
 }
 
+variable "notification_transport" {
+  description = "Order email delivery method. Switch to ses after verifying the sender and recipient eligibility."
+  type        = string
+  default     = "sns"
+
+  validation {
+    condition     = contains(["sns", "ses"], var.notification_transport)
+    error_message = "notification_transport must be sns or ses."
+  }
+}
+
+variable "retain_sns_notifications" {
+  description = "Keep the existing SNS topic and email subscription during SES cutover."
+  type        = bool
+  default     = true
+}
+
 variable "allowed_origins" {
   description = "Additional exact Amplify and local browser origins; the starchildclo.com origins are always included."
   type        = list(string)

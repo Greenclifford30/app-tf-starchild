@@ -17,6 +17,9 @@ LOGGER.setLevel(logging.INFO)
 ORDERS_TABLE = os.environ.get("ORDERS_TABLE", "")
 PRODUCTS_TABLE = os.environ.get("PRODUCTS_TABLE", "")
 NOTIFICATION_TOPIC_ARN = os.environ.get("NOTIFICATION_TOPIC_ARN", "")
+NOTIFICATION_TRANSPORT = os.environ.get("NOTIFICATION_TRANSPORT", "sns")
+NOTIFICATION_EMAIL = os.environ.get("NOTIFICATION_EMAIL", "")
+NOTIFICATION_FROM = os.environ.get("NOTIFICATION_FROM", "Starchild <orders@starchildclo.com>")
 ALLOWED_ORIGINS = {
     origin.strip()
     for origin in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
@@ -30,6 +33,7 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _DYNAMODB = None
 _SNS = None
+_SES = None
 
 
 class RequestError(ValueError):
@@ -55,6 +59,13 @@ def _sns_client():
     if _SNS is None:
         _SNS = boto3.client("sns")
     return _SNS
+
+
+def _ses_client():
+    global _SES
+    if _SES is None:
+        _SES = boto3.client("ses")
+    return _SES
 
 
 def _response(status_code, payload, origin=None):
@@ -245,11 +256,23 @@ def _notification_message(order):
 
 def _publish_notification(table, order):
     try:
-        result = _sns_client().publish(
-            TopicArn=NOTIFICATION_TOPIC_ARN,
-            Subject=f"Starchild order request {order['order_reference']}",
-            Message=_notification_message(order),
-        )
+        subject = f"Starchild order request {order['order_reference']}"
+        message = _notification_message(order)
+        if NOTIFICATION_TRANSPORT == "ses":
+            result = _ses_client().send_email(
+                Source=NOTIFICATION_FROM,
+                Destination={"ToAddresses": [NOTIFICATION_EMAIL]},
+                Message={
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {"Text": {"Data": message, "Charset": "UTF-8"}},
+                },
+            )
+        else:
+            result = _sns_client().publish(
+                TopicArn=NOTIFICATION_TOPIC_ARN,
+                Subject=subject,
+                Message=message,
+            )
         table.update_item(
             Key={"submission_id": order["submission_id"]},
             UpdateExpression="SET notification_status = :status, notification_message_id = :message_id",
@@ -260,7 +283,7 @@ def _publish_notification(table, order):
         )
         return True
     except (BotoCoreError, ClientError):
-        LOGGER.exception("Failed to publish order notification", extra={"order_reference": order["order_reference"]})
+        LOGGER.exception("Failed to send order notification", extra={"order_reference": order["order_reference"]})
         table.update_item(
             Key={"submission_id": order["submission_id"]},
             UpdateExpression="SET notification_status = :status",

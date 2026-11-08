@@ -10,6 +10,9 @@ from botocore.exceptions import ClientError
 os.environ.setdefault("ORDERS_TABLE", "orders-test")
 os.environ.setdefault("PRODUCTS_TABLE", "products-test")
 os.environ.setdefault("NOTIFICATION_TOPIC_ARN", "arn:aws:sns:us-east-1:123456789012:orders-test")
+os.environ["NOTIFICATION_TRANSPORT"] = "ses"
+os.environ["NOTIFICATION_EMAIL"] = "owner@example.com"
+os.environ["NOTIFICATION_FROM"] = "Starchild <orders@starchildclo.com>"
 os.environ.setdefault("ALLOWED_ORIGINS", "https://main.example.amplifyapp.com,http://localhost:3000")
 sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "lambda" / "create_order"))
 
@@ -80,19 +83,28 @@ class FakeSns:
         return {"MessageId": f"message-{len(self.messages)}"}
 
 
-class FlakySns(FakeSns):
+class FakeSes:
+    def __init__(self):
+        self.messages = []
+
+    def send_email(self, **message):
+        self.messages.append(message)
+        return {"MessageId": f"message-{len(self.messages)}"}
+
+
+class FlakySes(FakeSes):
     def __init__(self):
         super().__init__()
         self.failures_remaining = 1
 
-    def publish(self, **message):
+    def send_email(self, **message):
         if self.failures_remaining:
             self.failures_remaining -= 1
             raise ClientError(
                 {"Error": {"Code": "ServiceUnavailable", "Message": "try again"}},
-                "Publish",
+                "SendEmail",
             )
-        return super().publish(**message)
+        return super().send_email(**message)
 
 
 def valid_event(**payload_overrides):
@@ -133,9 +145,10 @@ class OrderHandlerTests(unittest.TestCase):
     def setUp(self):
         self.table = FakeTable()
         self.products = FakeProductsTable()
-        self.sns = FakeSns()
+        self.ses = FakeSes()
         lambda_function._DYNAMODB = FakeDynamoDB(self.table, self.products)
-        lambda_function._SNS = self.sns
+        lambda_function._SES = self.ses
+        lambda_function.NOTIFICATION_TRANSPORT = "ses"
 
     def test_valid_order_is_repriced_stored_and_notified(self):
         response = lambda_function.lambda_handler(valid_event(), None)
@@ -149,14 +162,19 @@ class OrderHandlerTests(unittest.TestCase):
         stored = next(iter(self.table.items.values()))
         self.assertEqual(stored["items"][0]["unit_price_cents"], 6800)
         self.assertEqual(stored["notification_status"], "PUBLISHED")
-        self.assertEqual(len(self.sns.messages), 1)
+        self.assertEqual(len(self.ses.messages), 1)
+        message = self.ses.messages[0]
+        self.assertEqual(message["Source"], "Starchild <orders@starchildclo.com>")
+        self.assertEqual(message["Destination"]["ToAddresses"], ["owner@example.com"])
+        self.assertIn(body["orderReference"], message["Message"]["Subject"]["Data"])
+        self.assertIn("Jordan Brooks", message["Message"]["Body"]["Text"]["Data"])
 
     def test_duplicate_submission_returns_original_reference_without_second_email(self):
         first = lambda_function.lambda_handler(valid_event(), None)
         second = lambda_function.lambda_handler(valid_event(), None)
 
         self.assertEqual(json.loads(first["body"])["orderReference"], json.loads(second["body"])["orderReference"])
-        self.assertEqual(len(self.sns.messages), 1)
+        self.assertEqual(len(self.ses.messages), 1)
 
     def test_retry_returns_original_even_after_product_is_archived(self):
         first = lambda_function.lambda_handler(valid_event(), None)
@@ -164,7 +182,7 @@ class OrderHandlerTests(unittest.TestCase):
         second = lambda_function.lambda_handler(valid_event(), None)
         self.assertEqual(second["statusCode"], 200)
         self.assertEqual(json.loads(first["body"])["orderReference"], json.loads(second["body"])["orderReference"])
-        self.assertEqual(len(self.sns.messages), 1)
+        self.assertEqual(len(self.ses.messages), 1)
 
     def test_invalid_variant_is_rejected(self):
         event = valid_event(items=[{
@@ -185,8 +203,8 @@ class OrderHandlerTests(unittest.TestCase):
         self.assertEqual(self.table.items, {})
 
     def test_retry_completes_a_delayed_notification_without_a_second_order(self):
-        self.sns = FlakySns()
-        lambda_function._SNS = self.sns
+        self.ses = FlakySes()
+        lambda_function._SES = self.ses
 
         with self.assertLogs(lambda_function.LOGGER, level="ERROR"):
             first = lambda_function.lambda_handler(valid_event(), None)
@@ -197,7 +215,16 @@ class OrderHandlerTests(unittest.TestCase):
         self.assertEqual(second["statusCode"], 200)
         self.assertEqual(json.loads(second["body"])["orderReference"], original)
         self.assertEqual(len(self.table.items), 1)
-        self.assertEqual(len(self.sns.messages), 1)
+        self.assertEqual(len(self.ses.messages), 1)
+
+    def test_sns_remains_available_during_cutover(self):
+        sns = FakeSns()
+        lambda_function._SNS = sns
+        lambda_function.NOTIFICATION_TRANSPORT = "sns"
+        response = lambda_function.lambda_handler(valid_event(), None)
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(len(sns.messages), 1)
+        self.assertEqual(len(self.ses.messages), 0)
 
     def test_unapproved_browser_origin_is_rejected(self):
         event = valid_event()

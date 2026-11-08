@@ -35,11 +35,26 @@ output "orders_table_name" {
 }
 
 output "notification_topic_arn" {
-  description = "SNS topic used for operator order notifications."
-  value       = aws_sns_topic.order_requests.arn
+  description = "SNS topic retained during the notification cutover, if enabled."
+  value       = try(aws_sns_topic.order_requests[0].arn, null)
 }
 
 output "notification_confirmation_required" {
-  description = "The notification address must confirm the email sent by Amazon SNS."
-  value       = true
+  description = "Whether the retained SNS subscription requires recipient confirmation."
+  value       = var.retain_sns_notifications
+}
+
+output "notification_ses_dns_records" {
+  description = "DNS records required to verify the notification sending domain and enable DKIM."
+  value = concat([
+    {
+      name  = "_amazonses.${aws_ses_domain_identity.notifications.domain}"
+      type  = "TXT"
+      value = aws_ses_domain_identity.notifications.verification_token
+    }
+    ], [for token in aws_ses_domain_dkim.notifications.dkim_tokens : {
+      name  = "${token}._domainkey.${aws_ses_domain_identity.notifications.domain}"
+      type  = "CNAME"
+      value = "${token}.dkim.amazonses.com"
+  }])
 }
