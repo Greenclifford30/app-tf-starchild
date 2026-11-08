@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useCart } from "../../cart";
 
 type PurchasePanelProps = {
@@ -20,15 +21,18 @@ export default function PurchasePanel({ productSlug, name, image, alt, price, co
   const [size, setSize] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [notice, setNotice] = useState<string | null>(null);
+  const [added, setAdded] = useState(false);
 
   function addToBag() {
     if (!size) {
       setNotice("Choose a size before adding this piece to your bag.");
+      setAdded(false);
       return;
     }
 
     addItem({ productSlug, name, image, alt, unitPrice: price, color, size, quantity });
-    setNotice(`${quantity} ${name} in ${color}, size ${size}, added to your bag.`);
+    setNotice(`${name} in ${color}, size ${size}, is in your bag.`);
+    setAdded(true);
   }
 
   return (
@@ -87,6 +91,7 @@ export default function PurchasePanel({ productSlug, name, image, alt, price, co
       <p className={`product-purchase-notice${notice ? " is-visible" : ""}`} aria-live="polite" role={notice ? "status" : undefined}>
         {notice}
       </p>
+      {notice && added ? <Link className="text-link product-view-bag" href="/checkout">View bag</Link> : null}
       <p className="product-reassurance">Complimentary standard shipping on orders over $100. Returns accepted within 30 days.</p>
     </div>
   );

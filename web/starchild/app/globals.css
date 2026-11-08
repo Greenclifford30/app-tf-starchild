@@ -11,6 +11,8 @@
   --text-tertiary: #48556c;
   --muted: var(--text-secondary);
   --line: #cbd3e0;
+  --control-border: #68758b;
+  --on-solar: #10172b;
   --success: #166534;
   --danger: #9f1f1f;
   --danger-surface: #fff0f0;
@@ -22,8 +24,9 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+input::placeholder, textarea::placeholder { color: var(--text-tertiary); opacity: 1; }
 a { color: inherit; text-decoration: none; }
-a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--solar); outline-offset: 3px; }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--navy); outline-offset: 3px; }
 .site-shell { overflow: hidden; }
 .sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
@@ -37,7 +40,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .main-nav a:hover, .main-nav a[aria-current="page"], .utility-nav a:hover, .footer-links a:hover { color: var(--navy); }
 .utility-nav { font-size: .75rem; font-weight: 600; justify-content: flex-end; }
 .bag-link { align-items: center; display: inline-flex; gap: .4rem; min-height: 2.75rem; padding-inline: .25rem; }
-.bag-link span { align-items: center; background: var(--solar); border-radius: 999px; display: inline-flex; font-size: .6875rem; height: 1.25rem; justify-content: center; min-width: 1.25rem; }
+.bag-link span { align-items: center; background: var(--solar); border-radius: 999px; color: var(--on-solar); display: inline-flex; font-size: .6875rem; height: 1.25rem; justify-content: center; min-width: 1.25rem; padding-inline: .2rem; }
 .mobile-navigation { display: none; position: relative; }
 .mobile-menu-button { background: transparent; border: 1px solid var(--line); color: var(--ink); cursor: pointer; font: inherit; font-size: .75rem; font-weight: 650; min-height: 2.75rem; padding: .5rem .75rem; }
 .mobile-menu-panel { background: var(--surface); border: 1px solid var(--line); display: grid; min-width: 13rem; padding: .4rem; position: absolute; right: 0; top: calc(100% + .5rem); z-index: 5; }
@@ -93,12 +96,12 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .shop-filters { display: flex; gap: .75rem; }
 .shop-filters label { color: var(--text-tertiary); display: grid; font-size: .75rem; font-weight: 650; gap: .35rem; letter-spacing: .06em; text-transform: uppercase; }
 .shop-filters select { background: var(--surface); border: 1px solid var(--line); border-radius: .25rem; color: var(--ink); font: inherit; font-size: .875rem; font-weight: 600; letter-spacing: 0; min-height: 2.75rem; padding: .45rem 2rem .45rem .7rem; text-transform: none; }
-.shop-filters select:focus { border-color: var(--navy); outline: 2px solid color-mix(in srgb, var(--navy) 16%, transparent); outline-offset: 2px; }
+.shop-filters select:focus-visible { border-color: var(--navy); outline: 2px solid var(--navy); outline-offset: 2px; }
 .shop-product-grid { display: grid; gap: clamp(2.5rem, 5vw, 5rem) clamp(1rem, 2vw, 2rem); grid-template-columns: repeat(4, minmax(0, 1fr)); padding-top: clamp(2rem, 4vw, 3.5rem); }
 .shop-product-image { aspect-ratio: 3 / 4; background: var(--surface); display: block; }
 .shop-product-image img { object-fit: cover; object-position: center; transition: opacity 220ms ease, transform 400ms cubic-bezier(.2, .8, .2, 1); }
 .shop-product-image .product-image-alternate { opacity: 0; }
-.product-status { background: var(--solar); color: var(--ink); font-size: .75rem; font-weight: 700; left: .75rem; letter-spacing: .06em; padding: .4rem .45rem; position: absolute; text-transform: uppercase; top: .75rem; }
+.product-status { background: var(--solar); color: var(--on-solar); font-size: .75rem; font-weight: 700; left: .75rem; letter-spacing: .06em; padding: .4rem .45rem; position: absolute; text-transform: uppercase; top: .75rem; }
 .shop-product-info { align-items: start; display: flex; gap: 1rem; justify-content: space-between; padding-top: .9rem; }
 .shop-product-info .product-kind { margin-bottom: .35rem; }
 .shop-product-info h2 { font-size: 1.05rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.2; margin: 0; }
@@ -153,7 +156,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .field em { color: var(--text-tertiary); font-size: .75rem; font-style: normal; font-weight: 450; margin-left: .3rem; }
 .field input, .field select, .field textarea { background: var(--surface); border: 1px solid var(--line); border-radius: .25rem; color: var(--ink); font: inherit; font-size: .9375rem; font-weight: 450; min-height: 3rem; padding: .65rem .8rem; transition: border-color 160ms ease, box-shadow 160ms ease; }
 .field textarea { line-height: 1.5; resize: vertical; }
-.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--navy); box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent); outline: 0; }
+.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { border-color: var(--navy); outline: 2px solid var(--navy); outline-offset: 2px; }
 .checkout-section:disabled { opacity: .7; }
 .shipping-choice { align-items: center; border: 1px solid var(--ink); border-radius: .25rem; cursor: pointer; display: grid; gap: .75rem; grid-template-columns: auto 1fr auto; margin-top: 1.5rem; padding: 1rem; }
 .shipping-choice input { accent-color: var(--ink); height: 1rem; margin: 0; width: 1rem; }
@@ -206,7 +209,9 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .checkout-empty { margin: 0 auto; max-width: 42rem; padding: clamp(5rem, 14vw, 10rem) 1.25rem; text-align: center; }
 .checkout-empty h1 { font-size: clamp(3rem, 7vw, 5.5rem); letter-spacing: -.075em; line-height: .96; margin: 0; }
 .checkout-empty > p:not(.eyebrow) { color: var(--muted); line-height: 1.55; margin: 1.25rem auto 2rem; max-width: 30rem; }
-.product-page-header { align-items: center; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; min-height: 4.5rem; padding: 0 clamp(1.25rem, 4vw, 4rem); }
+.product-page-header { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 1rem; justify-content: space-between; min-height: 4.5rem; padding: 0 clamp(1.25rem, 4vw, 4rem); }
+.product-header-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; justify-content: flex-end; }
+.product-header-actions .bag-link { font-size: .875rem; font-weight: 650; }
 .product-detail { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(19rem, .85fr); margin: 0 auto; max-width: 1440px; }
 .product-gallery { background: var(--surface); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; }
 .product-detail-image { aspect-ratio: 3 / 4; }
@@ -226,7 +231,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .product-option:hover { border-color: var(--navy); }
 .product-option:active { transform: translateY(1px); }
 .product-option.is-selected { background: var(--ink); border-color: var(--ink); color: var(--surface); }
-.product-option:focus-visible, .quantity-control button:focus-visible { outline: 2px solid var(--solar); outline-offset: 3px; }
+.product-option:focus-visible, .quantity-control button:focus-visible { outline: 2px solid var(--navy); outline-offset: 3px; }
 .product-size-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .product-size-option { padding-inline: .25rem; }
 .product-quantity-row { border-top: 1px solid var(--line); margin-top: 1.75rem; padding-top: 1.5rem; }
@@ -239,6 +244,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .product-add-button { margin-top: 1.25rem; width: 100%; }
 .product-purchase-notice { color: var(--navy); font-size: .8125rem; line-height: 1.45; margin: .85rem 0 0; min-height: 0; }
 .product-purchase-notice:not(.is-visible) { display: none; }
+.product-view-bag { margin-top: .15rem; }
 .product-reassurance { color: var(--muted); font-size: .75rem; line-height: 1.5; margin: 1rem 0 0; }
 .product-story-copy { border-top: 1px solid var(--line); margin: 2rem 0; max-width: 31rem; padding-top: 1.5rem; }
 .product-story-copy p { color: var(--muted); line-height: 1.65; margin: 0; }
@@ -348,9 +354,8 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (prefers-color-scheme: dark) {
-  :root { --ink: #f2f4fb; --navy: #c5d2ff; --canvas: #111829; --surface: #192238; --tint: #202d4a; --text-secondary: #e0e7f3; --text-tertiary: #cbd6e6; --muted: var(--text-secondary); --line: #45536f; --success: #7be0a5; --danger: #ffb4ab; --danger-surface: #4e1a18; --logo-surface: #f2f4fb; --on-brand: #111829; }
-  .announcement, .button-primary { background: #0c1120; }
-  .button-primary:hover, .button-secondary:hover { background: #263c77; }
+  :root { --ink: #f2f4fb; --navy: #c5d2ff; --canvas: #111829; --surface: #192238; --tint: #202d4a; --text-secondary: #e0e7f3; --text-tertiary: #cbd6e6; --muted: var(--text-secondary); --line: #45536f; --control-border: #8997b0; --success: #7be0a5; --danger: #ffb4ab; --danger-surface: #4e1a18; --logo-surface: #f2f4fb; --on-brand: #111829; }
+  .button-primary:hover, .button-secondary:hover { background: var(--navy); color: var(--canvas); }
   .button-secondary, .community-intro { background: var(--surface); }
   .wordmark .brand-logo { filter: invert(1); }
 }
@@ -427,7 +432,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .orders-list { display: grid; }
 .orders-list button { background: transparent; border: 0; border-bottom: 1px solid var(--line); color: var(--ink); cursor: pointer; display: grid; font: inherit; gap: .35rem; padding: 1rem .75rem; text-align: left; }
 .orders-list button:hover { background: var(--tint); }
-.orders-list button.selected { background: var(--ink); color: white; }
+.orders-list button.selected { background: var(--ink); color: var(--surface); }
 .orders-list button strong { font-size: .875rem; }
 .orders-list button span { font-size: .75rem; line-height: 1.4; text-transform: capitalize; }
 .orders-link { background: transparent; border: 0; cursor: pointer; font: inherit; font-size: .8125rem; padding: .75rem 0; }
@@ -463,7 +468,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .orders-notice, .orders-error, .orders-warning { border: 1px solid var(--line); font-size: .875rem; padding: .9rem 1rem; }
 .orders-notice { background: var(--tint); }
 .orders-error { background: var(--danger-surface); color: var(--danger); }
-.orders-warning { background: #fff9dc; color: var(--ink); }
+.orders-warning { background: #fff9dc; color: #10172b; }
 .orders-history { list-style: none; margin: 0; padding: 0; }
 .orders-history li { border-bottom: 1px solid var(--line); display: grid; font-size: .875rem; gap: .35rem; padding: .8rem 0; }
 .orders-history li strong { text-transform: capitalize; }
@@ -472,3 +477,14 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .orders-history pre { background: var(--surface); font-size: .75rem; overflow: auto; padding: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .orders-page button:disabled { cursor: not-allowed; opacity: .55; }
 @media (max-width: 760px) { .orders-header { align-items: flex-start; flex-direction: column; padding: 1.5rem 1.25rem; }.orders-layout { display: block; }.orders-sidebar { border-bottom: 1px solid var(--line); border-right: 0; min-height: 0; padding: 1.25rem; }.orders-list { max-height: 18rem; overflow-y: auto; }.orders-content { padding: 2rem 1.25rem 4rem; }.orders-title { flex-direction: column; }.orders-fields { grid-template-columns: 1fr; } }
+
+/* Controls need stronger boundaries than decorative dividers in both themes. */
+.mobile-menu-button, .shop-filters select, .field input, .field select, .field textarea,
+.product-option, .quantity-control, .summary-quantity, .catalog-form input,
+.catalog-form select, .catalog-form textarea, .catalog-login input, .orders-filter select,
+.orders-form input:not([type="checkbox"]), .orders-form select, .orders-form textarea,
+.orders-subsection textarea { border-color: var(--control-border); }
+.catalog-form input:focus-visible, .catalog-form select:focus-visible, .catalog-form textarea:focus-visible {
+  border-color: var(--navy); outline: 2px solid var(--navy); outline-offset: 2px;
+}
+.catalog-image-field input:focus-visible ~ span { outline: 2px solid var(--navy); outline-offset: 3px; }

@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import BrandLogo from "../../brand-logo";
+import BagLink from "../../bag-link";
 import { getProduct } from "../../products";
 import PurchasePanel from "./purchase-panel";
 
@@ -40,9 +41,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <Link className="wordmark" href="/" aria-label="Starchild home">
           <BrandLogo />
         </Link>
-        <Link className="text-link" href="/shop">
-          Back to collection
-        </Link>
+        <nav className="product-header-actions" aria-label="Shopping navigation">
+          <Link className="text-link" href="/shop">Back to collection</Link>
+          <BagLink />
+        </nav>
       </header>
 
       <section className="product-detail" aria-labelledby="product-title">
