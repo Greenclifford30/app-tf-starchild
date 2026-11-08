@@ -24,7 +24,7 @@ resource "aws_s3_bucket_cors_configuration" "product_media" {
   cors_rule {
     allowed_headers = ["content-type"]
     allowed_methods = ["PUT"]
-    allowed_origins = var.allowed_origins
+    allowed_origins = local.cors_allowed_origins
     expose_headers  = ["etag"]
     max_age_seconds = 900
   }

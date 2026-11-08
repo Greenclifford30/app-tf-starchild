@@ -25,4 +25,10 @@ provider "aws" {
 
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
+  # Keep the storefront's production origins even when deployment-specific
+  # tfvars supply additional Amplify or local development origins.
+  cors_allowed_origins = distinct(concat(var.allowed_origins, [
+    "https://starchildclo.com",
+    "https://www.starchildclo.com"
+  ]))
 }

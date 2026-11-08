@@ -120,7 +120,7 @@ resource "aws_lambda_function" "create_order" {
 
   environment {
     variables = {
-      ALLOWED_ORIGINS        = join(",", var.allowed_origins)
+      ALLOWED_ORIGINS        = join(",", local.cors_allowed_origins)
       NOTIFICATION_TOPIC_ARN = aws_sns_topic.order_requests.arn
       ORDERS_TABLE           = aws_dynamodb_table.order_requests.name
       PRODUCTS_TABLE         = aws_dynamodb_table.products.name
@@ -146,7 +146,7 @@ resource "aws_apigatewayv2_api" "orders" {
   cors_configuration {
     allow_headers = ["content-type", "authorization"]
     allow_methods = ["OPTIONS", "GET", "POST", "PUT", "DELETE"]
-    allow_origins = var.allowed_origins
+    allow_origins = local.cors_allowed_origins
     max_age       = 86400
   }
 }

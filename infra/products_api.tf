@@ -41,7 +41,7 @@ resource "aws_lambda_function" "products" {
   timeout = 10
   environment {
     variables = {
-      ALLOWED_ORIGINS = join(",", var.allowed_origins)
+      ALLOWED_ORIGINS = join(",", local.cors_allowed_origins)
       PRODUCTS_TABLE  = aws_dynamodb_table.products.name
       MEDIA_BUCKET    = aws_s3_bucket.product_media.id
       MEDIA_BASE_URL  = "https://${aws_cloudfront_distribution.product_media.domain_name}"

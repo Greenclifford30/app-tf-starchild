@@ -28,7 +28,7 @@ variable "notification_email" {
 }
 
 variable "allowed_origins" {
-  description = "Exact Amplify and local origins allowed to submit order requests."
+  description = "Additional exact Amplify and local browser origins; the starchildclo.com origins are always included."
   type        = list(string)
   default     = ["http://localhost:3000"]
 

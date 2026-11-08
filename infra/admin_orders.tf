@@ -101,7 +101,7 @@ resource "aws_lambda_function" "admin_orders" {
   timeout          = 10
   environment {
     variables = {
-      ALLOWED_ORIGINS        = join(",", var.allowed_origins)
+      ALLOWED_ORIGINS        = join(",", local.cors_allowed_origins)
       REQUESTS_TABLE         = aws_dynamodb_table.order_requests.name
       CONFIRMED_ORDERS_TABLE = aws_dynamodb_table.confirmed_orders.name
       PRODUCTS_TABLE         = aws_dynamodb_table.products.name
