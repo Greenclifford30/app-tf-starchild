@@ -38,11 +38,15 @@ class FakeTable:
     def scan(self):
         return {"Items": [deepcopy(item) for item in self.items.values()]}
 
-    def update_item(self, Key, ConditionExpression, ExpressionAttributeValues, **_kwargs):
+    def update_item(self, Key, ConditionExpression, ExpressionAttributeValues, **kwargs):
         if Key["slug"] not in self.items:
             raise ClientError({"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem")
-        self.items[Key["slug"]]["catalog_status"] = ExpressionAttributeValues[":archived"]
-        self.items[Key["slug"]]["updated_at"] = ExpressionAttributeValues[":updated"]
+        if "ExpressionAttributeNames" in kwargs:
+            for name, field in kwargs["ExpressionAttributeNames"].items():
+                self.items[Key["slug"]][field] = deepcopy(ExpressionAttributeValues[name.replace("#field", ":value")])
+        else:
+            self.items[Key["slug"]]["catalog_status"] = ExpressionAttributeValues[":archived"]
+            self.items[Key["slug"]]["updated_at"] = ExpressionAttributeValues[":updated"]
         return {"Attributes": deepcopy(self.items[Key["slug"]])}
 
 
@@ -131,6 +135,21 @@ class ProductHandlerTests(unittest.TestCase):
         body = json.loads(response["body"])
         self.assertEqual(response["statusCode"], 201)
         self.assertEqual(body["product"]["image"], "https://media.example.com/products/test-tee/front.png")
+
+    def test_catalog_edit_preserves_fields_owned_by_inventory(self):
+        products_lambda.lambda_handler(event("POST /products", payload(), admin=True), None)
+        original_update = self.table.update_item
+
+        def update_after_inventory_change(**kwargs):
+            # A stock writer can update the record after the catalog read.
+            self.table.items["test-tee"]["inventory"] = {"white-s": {"on_hand": 4, "reserved": 2}}
+            return original_update(**kwargs)
+
+        self.table.update_item = update_after_inventory_change
+        response = products_lambda.lambda_handler(event("PUT /products/{slug}", payload(name="Updated Tee"), slug="test-tee", admin=True), None)
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(self.table.items["test-tee"]["inventory"], {"white-s": {"on_hand": 4, "reserved": 2}})
+        self.assertEqual(json.loads(response["body"])["product"]["name"], "Updated Tee")
 
     def test_upload_url_requires_admin_and_valid_content_type(self):
         response = products_lambda.lambda_handler(event("POST /product-images/upload-url", {"contentType": "image/png"}, admin=True), None)

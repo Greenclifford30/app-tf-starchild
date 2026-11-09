@@ -237,9 +237,18 @@ def lambda_handler(event, _context):
             if not existing:
                 return _response(404, {"message": "Product not found."}, origin)
             item = _product(_body(event), slug)
-            item.update({"created_at": existing["created_at"], "updated_at": datetime.now(timezone.utc).isoformat()})
-            table.put_item(Item=item)
-            return _response(200, {"product": _admin_product(item)}, origin)
+            # Update only catalog-owned fields. Replacing the whole record can
+            # discard inventory or other fields written since the read above.
+            item.pop("slug")
+            item["updated_at"] = datetime.now(timezone.utc).isoformat()
+            names = {f"#field{index}": name for index, name in enumerate(item)}
+            values = {f":value{index}": value for index, value in enumerate(item.values())}
+            expression = "SET " + ", ".join(f"#field{index} = :value{index}" for index in range(len(item)))
+            result = table.update_item(Key={"slug": slug}, UpdateExpression=expression,
+                                       ConditionExpression="attribute_exists(slug)",
+                                       ExpressionAttributeNames=names, ExpressionAttributeValues=values,
+                                       ReturnValues="ALL_NEW")
+            return _response(200, {"product": _admin_product(result["Attributes"])}, origin)
         if route == "DELETE /products/{slug}":
             result = table.update_item(Key={"slug": slug}, UpdateExpression="SET catalog_status = :archived, updated_at = :updated", ConditionExpression="attribute_exists(slug)", ExpressionAttributeValues={":archived": "ARCHIVED", ":updated": datetime.now(timezone.utc).isoformat()}, ReturnValues="ALL_NEW")
             return _response(200, {"product": _admin_product(result["Attributes"])}, origin)
