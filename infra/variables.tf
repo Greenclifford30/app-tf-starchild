@@ -4,6 +4,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "enable_api_custom_domain" {
+  description = "Enable the API domain mapping after publishing the ACM DNS validation record."
+  type        = bool
+  default     = false
+}
+
 variable "project_name" {
   description = "Name used to prefix MVP resources."
   type        = string
