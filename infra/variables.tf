@@ -10,6 +10,12 @@ variable "enable_api_custom_domain" {
   default     = false
 }
 
+variable "manual_order_inventory_enabled" {
+  description = "Reserve stock on confirmation of manual requests. Stripe checkout is not yet connected to inventory."
+  type        = bool
+  default     = true
+}
+
 variable "project_name" {
   description = "Name used to prefix MVP resources."
   type        = string

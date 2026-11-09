@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import sys
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -10,6 +11,9 @@ from uuid import uuid4
 
 from boto3.dynamodb.types import TypeDeserializer
 from botocore.exceptions import ClientError
+
+sys.path.insert(0, str(Path(__file__).parents[1] / 'src/inventory'))
+import inventory
 
 spec = importlib.util.spec_from_file_location('admin_orders_handler', Path(__file__).parents[1] / 'src/lambda/admin_orders/lambda_function.py')
 handler = importlib.util.module_from_spec(spec)
@@ -73,6 +77,14 @@ class FakeDatabase:
                     raise conflict()
             elif operation == 'Update':
                 current = table.items.get(table.identity(unwire(data['Key'])))
+                if data['TableName'] == 'products-test':
+                    if not current or current.get('inventory') != values[':original']:
+                        raise conflict()
+                    if ':active' in values and (current.get('catalog_status') != values[':active'] or current.get('colors') != values[':colors'] or current.get('sizes') != values[':sizes']):
+                        raise conflict()
+                    if ':name' in values and (current.get('name') != values[':name'] or current.get('price_cents') != values[':price']):
+                        raise conflict()
+                    continue
                 if not current or current.get('order_id') or current.get('review_status', 'PENDING') != 'PENDING':
                     raise conflict()
             elif operation == 'ConditionCheck':
@@ -88,7 +100,9 @@ class FakeDatabase:
             elif operation == 'Update':
                 item = table.items[table.identity(unwire(data['Key']))]
                 values = unwire(data['ExpressionAttributeValues'])
-                if ':converted' in values:
+                if data['TableName'] == 'products-test':
+                    item['inventory'] = deepcopy(values[':updated'])
+                elif ':converted' in values:
                     item.update(review_status=values[':converted'], order_id=values[':order'], reviewed_at=values[':at'], reviewed_by=values[':actor'])
                 else:
                     item.update(review_status=values[':declined'], decline_reason=values[':reason'], reviewed_at=values[':at'], reviewed_by=values[':actor'])
@@ -177,6 +191,80 @@ class AdminOrdersTests(unittest.TestCase):
         order = self.act(order, 'DELIVER')
         self.assertEqual((order['order_status'], order['fulfillment_status']), ('COMPLETED', 'DELIVERED'))
         self.assertNotIn('fulfillment_pk', handler.get_order(order['order_id']))
+
+    def test_tracked_manual_order_reserves_then_consumes_on_shipment(self):
+        key = inventory.variant_key('Black', 'M')
+        self.database.Table('products-test').items[('tee',)]['inventory'] = {key: {'color': 'Black', 'size': 'M', 'onHand': 5, 'reserved': 0}}
+        with patch.object(handler, 'MANUAL_INVENTORY_ENABLED', True):
+            order = self.create()
+            stock = self.database.Table('products-test').items[('tee',)]['inventory'][key]
+            self.assertEqual((stock['onHand'], stock['reserved']), (5, 2))
+            self.assertEqual(order['inventory_reservation'], 'RESERVED')
+            order = self.act(order, 'START_PROCESSING')
+            order = self.act(order, 'RECORD_PAYMENT', paymentMethod='Cash')
+            order = self.act(order, 'SHIP', carrier='UPS')
+            stock = self.database.Table('products-test').items[('tee',)]['inventory'][key]
+            self.assertEqual((stock['onHand'], stock['reserved']), (3, 0))
+            self.assertEqual(order['inventory_reservation'], 'CONSUMED')
+
+    def test_tracked_manual_cancellation_releases_stock(self):
+        key = inventory.variant_key('Black', 'M')
+        self.database.Table('products-test').items[('tee',)]['inventory'] = {key: {'color': 'Black', 'size': 'M', 'onHand': 5, 'reserved': 0}}
+        with patch.object(handler, 'MANUAL_INVENTORY_ENABLED', True):
+            order = self.act(self.create(), 'CANCEL', reason='Changed mind')
+            stock = self.database.Table('products-test').items[('tee',)]['inventory'][key]
+            self.assertEqual((stock['onHand'], stock['reserved']), (5, 0))
+            self.assertEqual(order['inventory_reservation'], 'RELEASED')
+
+    def test_tracked_pickup_consumes_stock_when_payment_and_handoff_complete(self):
+        key = inventory.variant_key('Black', 'M')
+        self.database.Table('products-test').items[('tee',)]['inventory'] = {key: {'color': 'Black', 'size': 'M', 'onHand': 5, 'reserved': 0}}
+        with patch.object(handler, 'MANUAL_INVENTORY_ENABLED', True):
+            order = self.act(self.create('PICKUP'), 'START_PROCESSING')
+            order = self.act(order, 'READY_FOR_PICKUP')
+            order = self.act(order, 'PICKED_UP_AND_PAY', paymentMethod='Cash')
+        stock = self.database.Table('products-test').items[('tee',)]['inventory'][key]
+        self.assertEqual((stock['onHand'], stock['reserved']), (3, 0))
+        self.assertEqual(order['inventory_reservation'], 'CONSUMED')
+
+    def test_tracked_manual_confirmation_rejects_untracked_stock(self):
+        with patch.object(handler, 'MANUAL_INVENTORY_ENABLED', True), self.assertRaises(handler.ApiError) as error:
+            self.create()
+        self.assertEqual(error.exception.status, 409)
+        self.assertNotIn('order_id', handler.get_request(self.request_id))
+
+    def test_failed_confirmation_transaction_leaves_stock_untouched(self):
+        key = inventory.variant_key('Black', 'M')
+        self.database.Table('products-test').items[('tee',)]['inventory'] = {key: {'color': 'Black', 'size': 'M', 'onHand': 5, 'reserved': 0}}
+        self.database.fail_next = True
+        with patch.object(handler, 'MANUAL_INVENTORY_ENABLED', True), self.assertRaises(handler.ApiError):
+            self.create()
+        self.assertEqual(self.database.Table('products-test').items[('tee',)]['inventory'][key]['reserved'], 0)
+        self.assertNotIn('order_id', handler.get_request(self.request_id))
+
+    def test_concurrent_stock_change_blocks_confirmation(self):
+        key = inventory.variant_key('Black', 'M')
+        product = self.database.Table('products-test').items[('tee',)]
+        product['inventory'] = {key: {'color': 'Black', 'size': 'M', 'onHand': 2, 'reserved': 0}}
+        def competing_transaction(actions):
+            product['inventory'][key]['reserved'] = 2
+            self.database.transact(actions)
+        with patch.object(handler, 'MANUAL_INVENTORY_ENABLED', True), patch.object(handler, 'transact', competing_transaction), self.assertRaises(handler.ApiError) as error:
+            self.create()
+        self.assertEqual(error.exception.status, 409)
+        self.assertNotIn('order_id', handler.get_request(self.request_id))
+        self.assertEqual(product['inventory'][key]['reserved'], 2)
+
+    def test_retrying_tracked_cancellation_releases_once(self):
+        key = inventory.variant_key('Black', 'M')
+        self.database.Table('products-test').items[('tee',)]['inventory'] = {key: {'color': 'Black', 'size': 'M', 'onHand': 5, 'reserved': 0}}
+        with patch.object(handler, 'MANUAL_INVENTORY_ENABLED', True):
+            order = self.create()
+            payload = {'version': 1, 'operationId': str(uuid4()), 'action': 'CANCEL', 'reason': 'Changed mind'}
+            handler.action(order['order_id'], payload, 'admin-sub')
+            handler.action(order['order_id'], payload, 'admin-sub')
+        stock = self.database.Table('products-test').items[('tee',)]['inventory'][key]
+        self.assertEqual((stock['onHand'], stock['reserved']), (5, 0))
 
     def test_pickup_cash_and_paid_cancellation(self):
         order = self.act(self.create('PICKUP'), 'START_PROCESSING')

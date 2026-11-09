@@ -74,7 +74,7 @@ resource "aws_iam_role_policy" "admin_orders_data" {
     Statement = [
       { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Query"], Resource = [aws_dynamodb_table.order_requests.arn, "${aws_dynamodb_table.order_requests.arn}/index/review"] },
       { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query"], Resource = [aws_dynamodb_table.confirmed_orders.arn, "${aws_dynamodb_table.confirmed_orders.arn}/index/*"] },
-      { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:ConditionCheckItem"], Resource = aws_dynamodb_table.products.arn },
+      { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:ConditionCheckItem", "dynamodb:UpdateItem"], Resource = aws_dynamodb_table.products.arn },
       { Effect = "Allow", Action = ["dynamodb:PutItem"], Resource = aws_dynamodb_table.customer_notifications.arn }
     ]
   })
@@ -100,7 +100,7 @@ resource "aws_lambda_function" "admin_orders" {
   architectures    = ["arm64"]
   memory_size      = 256
   timeout          = 25
-  layers           = var.stripe_payments_enabled ? [aws_lambda_layer_version.payments[0].arn, aws_lambda_layer_version.payment_helpers[0].arn] : []
+  layers           = concat([aws_lambda_layer_version.inventory_helpers.arn], var.stripe_payments_enabled ? [aws_lambda_layer_version.payments[0].arn, aws_lambda_layer_version.payment_helpers[0].arn] : [])
   environment {
     variables = {
       ALLOWED_ORIGINS              = join(",", local.cors_allowed_origins)
@@ -109,6 +109,7 @@ resource "aws_lambda_function" "admin_orders" {
       PRODUCTS_TABLE               = aws_dynamodb_table.products.name
       CUSTOMER_NOTIFICATIONS_TABLE = aws_dynamodb_table.customer_notifications.name
       PAYMENT_INSTRUCTIONS         = var.payment_instructions
+      MANUAL_INVENTORY_ENABLED     = tostring(var.manual_order_inventory_enabled)
       STRIPE_SECRET_ARN            = try(aws_secretsmanager_secret.stripe[0].arn, "")
     }
   }

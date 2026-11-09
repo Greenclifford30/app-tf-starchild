@@ -22,6 +22,7 @@ ORDERS = os.environ.get('CONFIRMED_ORDERS_TABLE', '')
 PRODUCTS = os.environ.get('PRODUCTS_TABLE', '')
 NOTIFICATIONS = os.environ.get('CUSTOMER_NOTIFICATIONS_TABLE', '')
 PAYMENT_INSTRUCTIONS = os.environ.get('PAYMENT_INSTRUCTIONS', '').strip()
+MANUAL_INVENTORY_ENABLED = os.environ.get('MANUAL_INVENTORY_ENABLED', 'false').lower() == 'true'
 ALLOWED_ORIGINS = set(filter(None, (x.strip() for x in os.environ.get('ALLOWED_ORIGINS', '').split(','))))
 DB = None
 CLIENT = None
@@ -197,6 +198,13 @@ def notification_action(notification_id, kind, snapshot, timestamp):
     return put_action(NOTIFICATIONS, {'notification_id': notification_id, 'kind': kind, 'status': 'PENDING',
                                     'created_at': timestamp, 'snapshot': snapshot}, 'attribute_not_exists(notification_id)')
 
+def inventory_actions(items, transition, expected_products=None):
+    from inventory import InventoryError, product_actions
+    try:
+        return product_actions(db().Table(PRODUCTS), PRODUCTS, items, transition, expected_products)
+    except InventoryError as exc:
+        raise ApiError(409, str(exc)) from exc
+
 def stripe_service():
     # Imported lazily so the historical manual workflow has no Stripe dependency.
     from starchild_stripe import client, plain
@@ -352,6 +360,8 @@ def confirm(request_id, payload, actor):
              'fulfillment_method': method, 'pickup_instructions': instructions, 'manual_availability_confirmed': True,
              'payment': None, 'provider_reference': None, 'refund_follow_up': False, 'version': 1,
              'all_pk': 'ORDERS', 'status_pk': 'CONFIRMED', 'fulfillment_pk': 'OPEN', 'index_sort': f'{timestamp}#{order_id}'}
+    if MANUAL_INVENTORY_ENABLED:
+        order['inventory_reservation'] = 'RESERVED'
     actions = [put_action(ORDERS, order, 'attribute_not_exists(pk)'),
                put_action(ORDERS, {'pk': f'NUMBER#{number}', 'sk': 'RESERVED', 'order_id': order_id}, 'attribute_not_exists(pk)'),
                put_action(ORDERS, event_item(order_id, 'ORDER_CONFIRMED', actor, timestamp, {'request_id': request_id, 'adjustment_reason': reason}), 'attribute_not_exists(pk)'),
@@ -360,12 +370,15 @@ def confirm(request_id, payload, actor):
                            'ConditionExpression': 'attribute_exists(submission_id) AND attribute_not_exists(order_id) AND (attribute_not_exists(review_status) OR review_status = :pending)',
                            'ExpressionAttributeValues': wire({':converted': 'CONVERTED', ':order': order_id, ':at': timestamp, ':actor': actor, ':pending': 'PENDING'})}}]
     actions.append(notification_action(f'ORDER#{order_id}#CONFIRMED', 'ORDER_CONFIRMED', {**order, 'payment_instructions': PAYMENT_INSTRUCTIONS}, timestamp))
-    for slug, product in products.items():
-        # Compare every field used to create the snapshot or validate the selected variant.
-        actions.append({'ConditionCheck': {'TableName': PRODUCTS, 'Key': wire({'slug': slug}),
-                       'ConditionExpression': 'catalog_status = :active AND #n = :name AND price_cents = :price AND colors = :colors AND sizes = :sizes',
-                       'ExpressionAttributeNames': {'#n': 'name'},
-                       'ExpressionAttributeValues': wire({':active': 'ACTIVE', ':name': product['name'], ':price': product['price_cents'], ':colors': product['colors'], ':sizes': product['sizes']})}})
+    if MANUAL_INVENTORY_ENABLED:
+        actions.extend(inventory_actions(items, 'reserve', products))
+    else:
+        for slug, product in products.items():
+            # Compare every field used to create the snapshot or validate the selected variant.
+            actions.append({'ConditionCheck': {'TableName': PRODUCTS, 'Key': wire({'slug': slug}),
+                           'ConditionExpression': 'catalog_status = :active AND #n = :name AND price_cents = :price AND colors = :colors AND sizes = :sizes',
+                           'ExpressionAttributeNames': {'#n': 'name'},
+                           'ExpressionAttributeValues': wire({':active': 'ACTIVE', ':name': product['name'], ':price': product['price_cents'], ':colors': product['colors'], ':sizes': product['sizes']})}})
     try:
         transact(actions)
     except ClientError as exc:
@@ -476,6 +489,11 @@ def action(order_id, payload, actor):
         order.pop('fulfillment_pk', None)
     else:
         raise ApiError(409, 'This action is not valid for the current order state.')
+    stock_actions = []
+    if order.get('inventory_reservation') == 'RESERVED' and kind in ('CANCEL', 'SHIP', 'PICK_UP', 'PICKED_UP_AND_PAY'):
+        transition = 'release' if kind == 'CANCEL' else 'consume'
+        stock_actions = inventory_actions(order['items'], transition)
+        order['inventory_reservation'] = 'RELEASED' if transition == 'release' else 'CONSUMED'
     order.update(updated_at=timestamp, version=expected + 1)
     event = event_item(order_id, kind, actor, timestamp, {'before': previous,
         'after': {'order_status': order['order_status'], 'payment_status': order['payment_status'], 'fulfillment_status': order['fulfillment_status']},
@@ -487,6 +505,7 @@ def action(order_id, payload, actor):
     try:
         actions = [{'Put': write}, put_action(ORDERS, event, 'attribute_not_exists(pk)'),
                    put_action(ORDERS, {**op_key, 'fingerprint': fingerprint, 'created_at': timestamp}, 'attribute_not_exists(pk)')]
+        actions.extend(stock_actions)
         if kind in ('RECORD_PAYMENT', 'SHIP', 'DELIVER', 'READY_FOR_PICKUP', 'PICK_UP', 'PICKED_UP_AND_PAY', 'CANCEL'):
             actions.append(notification_action(f'ORDER#{order_id}#OP#{operation}', kind, order, timestamp))
         transact(actions)
