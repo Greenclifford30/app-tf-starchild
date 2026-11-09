@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from botocore.exceptions import ClientError
+from boto3.dynamodb.types import TypeDeserializer
 
 os.environ.setdefault("ORDERS_TABLE", "orders-test")
 os.environ.setdefault("PRODUCTS_TABLE", "products-test")
@@ -45,6 +46,25 @@ class FakeTable:
         if ":message_id" in ExpressionAttributeValues:
             item["notification_message_id"] = ExpressionAttributeValues[":message_id"]
         return {}
+
+
+class FakeTransactionClient:
+    def __init__(self, table):
+        self.table = table
+        self.jobs = {}
+        self.fail_next = False
+
+    def transact_write_items(self, TransactItems):
+        deserialize = TypeDeserializer().deserialize
+        items = [{k: deserialize(v) for k, v in entry['Put']['Item'].items()} for entry in TransactItems]
+        order, job = items
+        if self.fail_next:
+            self.fail_next = False
+            raise ClientError({'Error': {'Code': 'TransactionCanceledException'}}, 'TransactWriteItems')
+        if order['submission_id'] in self.table.items or job['notification_id'] in self.jobs:
+            raise ClientError({'Error': {'Code': 'TransactionCanceledException'}}, 'TransactWriteItems')
+        self.table.items[order['submission_id']] = deepcopy(order)
+        self.jobs[job['notification_id']] = deepcopy(job)
 
 
 class FakeProductsTable:
@@ -145,6 +165,8 @@ class OrderHandlerTests(unittest.TestCase):
     def setUp(self):
         self.table = FakeTable()
         self.products = FakeProductsTable()
+        self.transactions = FakeTransactionClient(self.table)
+        lambda_function._DYNAMO_CLIENT = self.transactions
         self.ses = FakeSes()
         lambda_function._DYNAMODB = FakeDynamoDB(self.table, self.products)
         lambda_function._SES = self.ses
@@ -175,6 +197,7 @@ class OrderHandlerTests(unittest.TestCase):
 
         self.assertEqual(json.loads(first["body"])["orderReference"], json.loads(second["body"])["orderReference"])
         self.assertEqual(len(self.ses.messages), 1)
+        self.assertEqual(len(self.transactions.jobs), 1)
 
     def test_retry_returns_original_even_after_product_is_archived(self):
         first = lambda_function.lambda_handler(valid_event(), None)
@@ -183,6 +206,14 @@ class OrderHandlerTests(unittest.TestCase):
         self.assertEqual(second["statusCode"], 200)
         self.assertEqual(json.loads(first["body"])["orderReference"], json.loads(second["body"])["orderReference"])
         self.assertEqual(len(self.ses.messages), 1)
+
+    def test_request_and_customer_job_fail_together(self):
+        self.transactions.fail_next = True
+        response = lambda_function.lambda_handler(valid_event(), None)
+        self.assertEqual(response["statusCode"], 503)
+        self.assertFalse(self.table.items)
+        self.assertFalse(self.transactions.jobs)
+        self.assertFalse(self.ses.messages)
 
     def test_invalid_variant_is_rejected(self):
         event = valid_event(items=[{

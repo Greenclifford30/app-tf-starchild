@@ -58,3 +58,13 @@ output "notification_ses_dns_records" {
       value = "${token}.dkim.amazonses.com"
   }])
 }
+
+output "customer_notifications_table_name" {
+  description = "Customer email outbox for delivery status and retry."
+  value       = aws_dynamodb_table.customer_notifications.name
+}
+
+output "customer_notification_failure_queue_url" {
+  description = "Queue containing exhausted customer email stream failures."
+  value       = aws_sqs_queue.customer_notifications_failed.url
+}

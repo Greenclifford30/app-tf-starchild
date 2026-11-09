@@ -103,6 +103,11 @@ resource "aws_iam_role_policy" "order_lambda_data" {
       },
       {
         Effect   = "Allow"
+        Action   = ["dynamodb:PutItem"]
+        Resource = aws_dynamodb_table.customer_notifications.arn
+      },
+      {
+        Effect   = "Allow"
         Action   = ["dynamodb:GetItem"]
         Resource = aws_dynamodb_table.products.arn
       },
@@ -151,6 +156,7 @@ resource "aws_lambda_function" "create_order" {
       NOTIFICATION_FROM      = "Starchild <orders@starchildclo.com>"
       ORDERS_TABLE           = aws_dynamodb_table.order_requests.name
       PRODUCTS_TABLE         = aws_dynamodb_table.products.name
+      CUSTOMER_NOTIFICATIONS_TABLE = aws_dynamodb_table.customer_notifications.name
     }
   }
 

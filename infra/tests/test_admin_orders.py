@@ -12,7 +12,7 @@ from botocore.exceptions import ClientError
 
 spec = importlib.util.spec_from_file_location('admin_orders_handler', Path(__file__).parents[1] / 'src/lambda/admin_orders/lambda_function.py')
 handler = importlib.util.module_from_spec(spec)
-with patch.dict(os.environ, {'REQUESTS_TABLE': 'requests-test', 'CONFIRMED_ORDERS_TABLE': 'confirmed-test', 'PRODUCTS_TABLE': 'products-test', 'ALLOWED_ORIGINS': 'https://store.example'}):
+with patch.dict(os.environ, {'REQUESTS_TABLE': 'requests-test', 'CONFIRMED_ORDERS_TABLE': 'confirmed-test', 'PRODUCTS_TABLE': 'products-test', 'ALLOWED_ORIGINS': 'https://store.example', 'CUSTOMER_NOTIFICATIONS_TABLE': 'notifications-test', 'PAYMENT_INSTRUCTIONS': 'Pay by bank transfer.'}):
     spec.loader.exec_module(handler)
 deserializer = TypeDeserializer()
 
@@ -48,7 +48,7 @@ class FakeTable:
 
 class FakeDatabase:
     def __init__(self):
-        self.tables = {'requests-test': FakeTable(('submission_id',)), 'products-test': FakeTable(('slug',)), 'confirmed-test': FakeTable(('pk', 'sk'))}
+        self.tables = {'requests-test': FakeTable(('submission_id',)), 'products-test': FakeTable(('slug',)), 'confirmed-test': FakeTable(('pk', 'sk')), 'notifications-test': FakeTable(('notification_id',))}
         self.fail_next = False
 
     def Table(self, name):
@@ -66,7 +66,7 @@ class FakeDatabase:
             if operation == 'Put':
                 item = unwire(data['Item'])
                 existing = table.items.get(table.identity(item))
-                if data.get('ConditionExpression') == 'attribute_not_exists(pk)' and existing:
+                if data.get('ConditionExpression', '').startswith('attribute_not_exists(') and existing:
                     raise conflict()
                 if '#version = :expected' == data.get('ConditionExpression') and (not existing or existing['version'] != values[':expected']):
                     raise conflict()
@@ -87,7 +87,10 @@ class FakeDatabase:
             elif operation == 'Update':
                 item = table.items[table.identity(unwire(data['Key']))]
                 values = unwire(data['ExpressionAttributeValues'])
-                item.update(review_status=values[':converted'], order_id=values[':order'], reviewed_at=values[':at'], reviewed_by=values[':actor'])
+                if ':converted' in values:
+                    item.update(review_status=values[':converted'], order_id=values[':order'], reviewed_at=values[':at'], reviewed_by=values[':actor'])
+                else:
+                    item.update(review_status=values[':declined'], decline_reason=values[':reason'], reviewed_at=values[':at'], reviewed_by=values[':actor'])
 
 
 class AdminOrdersTests(unittest.TestCase):
@@ -127,6 +130,13 @@ class AdminOrdersTests(unittest.TestCase):
         records = self.database.Table('confirmed-test').items.values()
         self.assertEqual(sum(item['sk'] == 'META' for item in records), 1)
         self.assertEqual(sum(item['sk'].startswith('EVENT#') for item in records), 1)
+
+    def test_missing_payment_instructions_prevents_confirmation(self):
+        with patch.object(handler, 'PAYMENT_INSTRUCTIONS', ''):
+            with self.assertRaises(handler.ApiError) as error:
+                self.create()
+        self.assertEqual(error.exception.status, 503)
+        self.assertFalse(self.database.Table('notifications-test').items)
 
     def test_stale_quote_and_invalid_variant_do_not_convert(self):
         payload = self.payload()
@@ -190,6 +200,7 @@ class AdminOrdersTests(unittest.TestCase):
             self.act(order, 'START_PROCESSING')
         events = [x for x in self.database.Table('confirmed-test').items.values() if x['sk'].startswith('EVENT#')]
         self.assertEqual(len(events), 2)
+        self.assertEqual(len(self.database.Table('notifications-test').items), 2)
 
     def test_endpoint_requires_admin_and_authenticated_actor(self):
         request = {'routeKey': 'GET /admin/orders', 'headers': {'origin': 'https://store.example'}}

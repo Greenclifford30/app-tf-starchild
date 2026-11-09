@@ -63,3 +63,21 @@ variable "tags" {
     ManagedBy = "terraform"
   }
 }
+
+variable "payment_instructions" {
+  description = "Shared customer payment instructions included in order confirmations."
+  type        = string
+  validation {
+    condition     = length(trimspace(var.payment_instructions)) > 0 && length(var.payment_instructions) <= 2000
+    error_message = "Set payment_instructions to nonempty shared instructions of at most 2000 characters."
+  }
+}
+
+variable "customer_ses_ready" {
+  description = "Confirm SES sender and DKIM are verified and production sending is enabled in this region."
+  type        = bool
+  validation {
+    condition     = var.customer_ses_ready
+    error_message = "Verify the SES domain and DKIM and obtain production sending access before enabling customer emails; set customer_ses_ready to true after verification."
+  }
+}

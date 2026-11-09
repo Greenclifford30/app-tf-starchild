@@ -10,12 +10,14 @@ from uuid import UUID
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+from boto3.dynamodb.types import TypeSerializer
 
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
 
 ORDERS_TABLE = os.environ.get("ORDERS_TABLE", "")
 PRODUCTS_TABLE = os.environ.get("PRODUCTS_TABLE", "")
+CUSTOMER_NOTIFICATIONS_TABLE = os.environ.get("CUSTOMER_NOTIFICATIONS_TABLE", "")
 NOTIFICATION_TOPIC_ARN = os.environ.get("NOTIFICATION_TOPIC_ARN", "")
 NOTIFICATION_TRANSPORT = os.environ.get("NOTIFICATION_TRANSPORT", "sns")
 NOTIFICATION_EMAIL = os.environ.get("NOTIFICATION_EMAIL", "")
@@ -32,6 +34,7 @@ MAX_QUANTITY = 10
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _DYNAMODB = None
+_DYNAMO_CLIENT = None
 _SNS = None
 _SES = None
 
@@ -345,12 +348,18 @@ def lambda_handler(event, _context):
 
     table = _orders_table()
     try:
-        table.put_item(
-            Item=order,
-            ConditionExpression="attribute_not_exists(submission_id)",
-        )
+        serializer = TypeSerializer()
+        wire = lambda value: {k: serializer.serialize(v) for k, v in value.items()}
+        job = {"notification_id": f"REQUEST#{submission_id}#RECEIVED", "kind": "REQUEST_RECEIVED", "status": "PENDING", "created_at": order["created_at"], "snapshot": order}
+        global _DYNAMO_CLIENT
+        if _DYNAMO_CLIENT is None:
+            _DYNAMO_CLIENT = boto3.client("dynamodb")
+        _DYNAMO_CLIENT.transact_write_items(TransactItems=[
+            {"Put": {"TableName": ORDERS_TABLE, "Item": wire(order), "ConditionExpression": "attribute_not_exists(submission_id)"}},
+            {"Put": {"TableName": CUSTOMER_NOTIFICATIONS_TABLE, "Item": wire(job), "ConditionExpression": "attribute_not_exists(notification_id)"}},
+        ])
     except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+        if exc.response.get("Error", {}).get("Code") not in ("ConditionalCheckFailedException", "TransactionCanceledException"):
             LOGGER.exception("Failed to store order request")
             return _response(503, {"message": "We could not save your order request. Please try again."}, origin)
 

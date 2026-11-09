@@ -74,7 +74,8 @@ resource "aws_iam_role_policy" "admin_orders_data" {
     Statement = [
       { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Query"], Resource = [aws_dynamodb_table.order_requests.arn, "${aws_dynamodb_table.order_requests.arn}/index/review"] },
       { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"], Resource = [aws_dynamodb_table.confirmed_orders.arn, "${aws_dynamodb_table.confirmed_orders.arn}/index/*"] },
-      { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:ConditionCheckItem"], Resource = aws_dynamodb_table.products.arn }
+      { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:ConditionCheckItem"], Resource = aws_dynamodb_table.products.arn },
+      { Effect = "Allow", Action = ["dynamodb:PutItem"], Resource = aws_dynamodb_table.customer_notifications.arn }
     ]
   })
 }
@@ -105,6 +106,8 @@ resource "aws_lambda_function" "admin_orders" {
       REQUESTS_TABLE         = aws_dynamodb_table.order_requests.name
       CONFIRMED_ORDERS_TABLE = aws_dynamodb_table.confirmed_orders.name
       PRODUCTS_TABLE         = aws_dynamodb_table.products.name
+      CUSTOMER_NOTIFICATIONS_TABLE = aws_dynamodb_table.customer_notifications.name
+      PAYMENT_INSTRUCTIONS = var.payment_instructions
     }
   }
   depends_on = [aws_cloudwatch_log_group.admin_orders, aws_iam_role_policy_attachment.admin_orders_logs, aws_iam_role_policy.admin_orders_data]

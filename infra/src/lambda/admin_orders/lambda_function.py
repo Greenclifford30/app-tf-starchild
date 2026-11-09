@@ -20,6 +20,8 @@ LOG.setLevel(logging.INFO)
 REQUESTS = os.environ.get('REQUESTS_TABLE', '')
 ORDERS = os.environ.get('CONFIRMED_ORDERS_TABLE', '')
 PRODUCTS = os.environ.get('PRODUCTS_TABLE', '')
+NOTIFICATIONS = os.environ.get('CUSTOMER_NOTIFICATIONS_TABLE', '')
+PAYMENT_INSTRUCTIONS = os.environ.get('PAYMENT_INSTRUCTIONS', '').strip()
 ALLOWED_ORIGINS = set(filter(None, (x.strip() for x in os.environ.get('ALLOWED_ORIGINS', '').split(','))))
 DB = None
 CLIENT = None
@@ -191,12 +193,18 @@ def put_action(table, item, condition=None):
         action['ConditionExpression'] = condition
     return {'Put': action}
 
+def notification_action(notification_id, kind, snapshot, timestamp):
+    return put_action(NOTIFICATIONS, {'notification_id': notification_id, 'kind': kind, 'status': 'PENDING',
+                                    'created_at': timestamp, 'snapshot': snapshot}, 'attribute_not_exists(notification_id)')
+
 def confirm(request_id, payload, actor):
     request = get_request(request_id)
     if request.get('order_id'):
         return public_order(get_order(request['order_id']))
     if request.get('review_status', 'PENDING') != 'PENDING':
         raise ApiError(409, 'This request is no longer pending.')
+    if not PAYMENT_INSTRUCTIONS:
+        raise ApiError(503, 'Payment instructions are not configured. Contact the store administrator.')
     if payload.get('availabilityConfirmed') is not True:
         raise ApiError(400, 'Confirm availability before creating the order.')
     items, products, digest = quote(request)
@@ -237,6 +245,7 @@ def confirm(request_id, payload, actor):
                            'UpdateExpression': 'SET review_status = :converted, order_id = :order, reviewed_at = :at, reviewed_by = :actor',
                            'ConditionExpression': 'attribute_exists(submission_id) AND attribute_not_exists(order_id) AND (attribute_not_exists(review_status) OR review_status = :pending)',
                            'ExpressionAttributeValues': wire({':converted': 'CONVERTED', ':order': order_id, ':at': timestamp, ':actor': actor, ':pending': 'PENDING'})}}]
+    actions.append(notification_action(f'ORDER#{order_id}#CONFIRMED', 'ORDER_CONFIRMED', {**order, 'payment_instructions': PAYMENT_INSTRUCTIONS}, timestamp))
     for slug, product in products.items():
         # Compare every field used to create the snapshot or validate the selected variant.
         actions.append({'ConditionCheck': {'TableName': PRODUCTS, 'Key': wire({'slug': slug}),
@@ -257,14 +266,19 @@ def confirm(request_id, payload, actor):
 def decline(request_id, payload, actor):
     reason = text(payload.get('reason'), 'Decline reason')
     timestamp = now()
+    request = get_request(request_id)
+    updated = {**request, 'review_status': 'DECLINED', 'reviewed_at': timestamp, 'reviewed_by': actor, 'decline_reason': reason}
     try:
-        result = db().Table(REQUESTS).update_item(Key={'submission_id': request_id},
-            UpdateExpression='SET review_status = :declined, reviewed_at = :at, reviewed_by = :actor, decline_reason = :reason',
-            ConditionExpression='attribute_exists(submission_id) AND attribute_not_exists(order_id) AND (attribute_not_exists(review_status) OR review_status = :pending)',
-            ExpressionAttributeValues={':declined': 'DECLINED', ':at': timestamp, ':actor': actor, ':reason': reason, ':pending': 'PENDING'}, ReturnValues='ALL_NEW')
-        return result['Attributes']
+        transact([
+            {'Update': {'TableName': REQUESTS, 'Key': wire({'submission_id': request_id}),
+                        'UpdateExpression': 'SET review_status = :declined, reviewed_at = :at, reviewed_by = :actor, decline_reason = :reason',
+                        'ConditionExpression': 'attribute_exists(submission_id) AND attribute_not_exists(order_id) AND (attribute_not_exists(review_status) OR review_status = :pending)',
+                        'ExpressionAttributeValues': wire({':declined': 'DECLINED', ':at': timestamp, ':actor': actor, ':reason': reason, ':pending': 'PENDING'})}},
+            notification_action(f'REQUEST#{request_id}#DECLINED', 'REQUEST_DECLINED', updated, timestamp),
+        ])
+        return updated
     except ClientError as exc:
-        if exc.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
+        if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
             get_request(request_id)
             raise ApiError(409, 'This request is no longer pending.')
         raise
@@ -335,8 +349,11 @@ def action(order_id, payload, actor):
     write = {'TableName': ORDERS, 'Item': wire(order), 'ConditionExpression': '#version = :expected',
              'ExpressionAttributeNames': {'#version': 'version'}, 'ExpressionAttributeValues': wire({':expected': expected})}
     try:
-        transact([{'Put': write}, put_action(ORDERS, event, 'attribute_not_exists(pk)'),
-                  put_action(ORDERS, {**op_key, 'fingerprint': fingerprint, 'created_at': timestamp}, 'attribute_not_exists(pk)')])
+        actions = [{'Put': write}, put_action(ORDERS, event, 'attribute_not_exists(pk)'),
+                   put_action(ORDERS, {**op_key, 'fingerprint': fingerprint, 'created_at': timestamp}, 'attribute_not_exists(pk)')]
+        if kind in ('RECORD_PAYMENT', 'SHIP', 'DELIVER', 'READY_FOR_PICKUP', 'PICK_UP', 'PICKED_UP_AND_PAY', 'CANCEL'):
+            actions.append(notification_action(f'ORDER#{order_id}#OP#{operation}', kind, order, timestamp))
+        transact(actions)
     except ClientError as exc:
         if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
             prior = db().Table(ORDERS).get_item(Key=op_key, ConsistentRead=True).get('Item')
