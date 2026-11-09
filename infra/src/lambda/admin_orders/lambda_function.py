@@ -197,10 +197,124 @@ def notification_action(notification_id, kind, snapshot, timestamp):
     return put_action(NOTIFICATIONS, {'notification_id': notification_id, 'kind': kind, 'status': 'PENDING',
                                     'created_at': timestamp, 'snapshot': snapshot}, 'attribute_not_exists(notification_id)')
 
+def stripe_service():
+    # Imported lazily so the historical manual workflow has no Stripe dependency.
+    from starchild_stripe import client, plain
+    stripe, _ = client()
+    return stripe, plain
+
+def stripe_lock(request_id, action):
+    try:
+        db().Table(REQUESTS).update_item(
+            Key={'submission_id': request_id},
+            UpdateExpression='SET review_action = :action',
+            ConditionExpression='review_status = :pending AND attribute_not_exists(order_id) AND (attribute_not_exists(review_action) OR review_action = :action OR (review_action = :confirm AND :action = :decline AND payment_status = :failed))',
+            ExpressionAttributeValues={':action': action, ':pending': 'PENDING', ':confirm': 'CONFIRM', ':decline': 'DECLINE', ':failed': 'FAILED'})
+    except ClientError as exc:
+        if exc.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
+            raise ApiError(409, 'This request is already being processed. Reload it.') from exc
+        raise
+
+def capture_stripe(order):
+    if order.get('payment_provider') != 'stripe' or order.get('order_status') in ('CANCELED', 'COMPLETED') or order.get('payment_status') not in ('PENDING', 'FAILED'):
+        return
+    stripe, plain = stripe_service()
+    try:
+        intent = plain(stripe.PaymentIntent.retrieve(order['payment_intent_id']))
+        if intent['status'] == 'succeeded':
+            return
+        if intent['status'] != 'requires_capture' or int(intent['amount_capturable']) != int(order['total_cents']):
+            raise ApiError(409, 'The payment hold is no longer capturable. Contact the customer for a new checkout.')
+        stripe.PaymentIntent.capture(order['payment_intent_id'], idempotency_key=f"capture-{order['order_id']}")
+    except ApiError:
+        raise
+    except Exception as exc:
+        LOG.exception('Stripe capture failed for order %s', order['order_id'])
+        raise ApiError(503, 'Capture could not be confirmed. Retry capture or check Stripe before taking further action.') from exc
+
+def confirm_stripe(request, payload, actor):
+    if payload.get('availabilityConfirmed') is not True:
+        raise ApiError(400, 'Confirm availability before creating the order.')
+    request_id = request['submission_id']
+    stripe_lock(request_id, 'CONFIRM')
+    request = get_request(request_id)
+    stripe, plain = stripe_service()
+    try:
+        intent = plain(stripe.PaymentIntent.retrieve(request['payment_intent_id']))
+    except Exception as exc:
+        raise ApiError(503, 'Could not verify the payment hold. Retry shortly.') from exc
+    if request.get('payment_status') != 'AUTHORIZED' or intent.get('status') != 'requires_capture' or int(intent.get('amount_capturable') or 0) != int(request['total_cents']):
+        raise ApiError(409, 'The payment hold is no longer capturable. Decline the request and contact the customer.')
+    timestamp, order_id = now(), str(uuid4())
+    number = f"SC-{timestamp[:10].replace('-', '')}-{secrets.token_hex(4).upper()}"
+    order = {'pk': f'ORDER#{order_id}', 'sk': 'META', 'order_id': order_id, 'order_number': number,
+             'request_id': request_id, 'request_reference': request['order_reference'], 'created_at': timestamp,
+             'updated_at': timestamp, 'customer': request['customer'], 'items': request['items'],
+             'subtotal_cents': int(request['subtotal_cents']), 'discount_cents': 0, 'shipping_cents': int(request['shipping_cents']),
+             'tax_cents': int(request['tax_cents']), 'total_cents': int(request['total_cents']), 'currency': 'USD',
+             'adjustment_reason': '', 'order_status': 'CONFIRMED', 'payment_status': 'PENDING', 'fulfillment_status': 'UNFULFILLED',
+             'fulfillment_method': 'SHIPPING', 'pickup_instructions': '', 'manual_availability_confirmed': True,
+             'payment': None, 'payment_provider': 'stripe', 'payment_intent_id': request['payment_intent_id'],
+             'checkout_session_id': request['checkout_session_id'], 'capture_before': int(request['capture_before']),
+             'provider_reference': request['payment_intent_id'], 'refund_follow_up': False, 'version': 1,
+             'all_pk': 'ORDERS', 'status_pk': 'CONFIRMED', 'fulfillment_pk': 'OPEN', 'index_sort': f'{timestamp}#{order_id}'}
+    actions = [put_action(ORDERS, order, 'attribute_not_exists(pk)'),
+               put_action(ORDERS, {'pk': f'NUMBER#{number}', 'sk': 'RESERVED', 'order_id': order_id}, 'attribute_not_exists(pk)'),
+               put_action(ORDERS, event_item(order_id, 'ORDER_CONFIRMED', actor, timestamp, {'request_id': request_id}), 'attribute_not_exists(pk)'),
+               {'Update': {'TableName': REQUESTS, 'Key': wire({'submission_id': request_id}),
+                           'UpdateExpression': 'SET review_status = :converted, order_id = :order, reviewed_at = :at, reviewed_by = :actor',
+                           'ConditionExpression': 'attribute_exists(submission_id) AND attribute_not_exists(order_id) AND review_status = :pending AND review_action = :action AND payment_status = :authorized',
+                           'ExpressionAttributeValues': wire({':converted': 'CONVERTED', ':order': order_id, ':at': timestamp, ':actor': actor, ':pending': 'PENDING', ':action': 'CONFIRM', ':authorized': 'AUTHORIZED'})}}]
+    try:
+        transact(actions)
+    except ClientError as exc:
+        if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
+            fresh = get_request(request_id)
+            if fresh.get('order_id'):
+                order = get_order(fresh['order_id'])
+            else:
+                raise ApiError(409, 'The request changed. Reload and review it again.') from exc
+        else:
+            raise
+    capture_stripe(order)
+    return public_order(order)
+
+def refund_stripe(order, expected, actor):
+    if order.get('payment_provider') != 'stripe' or order.get('order_status') != 'CANCELED' or order.get('payment_status') not in ('PAID', 'REFUND_PENDING'):
+        raise ApiError(409, 'Only a canceled, paid Stripe order can be refunded.')
+    if order['payment_status'] == 'PAID':
+        timestamp = now()
+        audit = event_item(order['order_id'], 'STRIPE_REFUND_REQUESTED', actor, timestamp, {'payment_intent_id': order['payment_intent_id']})
+        try:
+            transact([
+                {'Update': {'TableName': ORDERS, 'Key': wire({'pk': order['pk'], 'sk': 'META'}),
+                    'UpdateExpression': 'SET payment_status = :pending, #version = :next, updated_at = :at',
+                    'ConditionExpression': '#version = :expected AND payment_status = :paid AND order_status = :canceled',
+                    'ExpressionAttributeNames': {'#version': 'version'},
+                    'ExpressionAttributeValues': wire({':pending': 'REFUND_PENDING', ':next': expected + 1, ':expected': expected,
+                                                      ':paid': 'PAID', ':canceled': 'CANCELED', ':at': timestamp})}},
+                put_action(ORDERS, audit, 'attribute_not_exists(pk)')])
+        except ClientError as exc:
+            if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
+                raise ApiError(409, 'This order changed. Reload it before retrying.') from exc
+            raise
+    stripe, _ = stripe_service()
+    try:
+        stripe.Refund.create(payment_intent=order['payment_intent_id'], idempotency_key=f"refund-{order['order_id']}")
+    except Exception as exc:
+        LOG.exception('Stripe refund failed for order %s', order['order_id'])
+        raise ApiError(503, 'Refund could not be confirmed. Reload and retry or check Stripe.') from exc
+    return public_order(get_order(order['order_id']))
+
 def confirm(request_id, payload, actor):
     request = get_request(request_id)
     if request.get('order_id'):
-        return public_order(get_order(request['order_id']))
+        existing = get_order(request['order_id'])
+        if existing.get('payment_provider') == 'stripe':
+            capture_stripe(existing)
+        return public_order(existing)
+    if request.get('payment_provider') == 'stripe':
+        return confirm_stripe(request, payload, actor)
     if request.get('review_status', 'PENDING') != 'PENDING':
         raise ApiError(409, 'This request is no longer pending.')
     if not PAYMENT_INSTRUCTIONS:
@@ -267,6 +381,19 @@ def decline(request_id, payload, actor):
     reason = text(payload.get('reason'), 'Decline reason')
     timestamp = now()
     request = get_request(request_id)
+    if request.get('payment_provider') == 'stripe':
+        stripe_lock(request_id, 'DECLINE')
+        stripe, plain = stripe_service()
+        try:
+            intent = plain(stripe.PaymentIntent.retrieve(request['payment_intent_id']))
+            if intent['status'] == 'requires_capture':
+                stripe.PaymentIntent.cancel(request['payment_intent_id'], idempotency_key=f"decline-{request_id}")
+            elif intent['status'] != 'canceled':
+                raise ApiError(409, 'This payment can no longer be canceled as a hold.')
+        except ApiError:
+            raise
+        except Exception as exc:
+            raise ApiError(503, 'Could not release the payment hold. Retry shortly.') from exc
     updated = {**request, 'review_status': 'DECLINED', 'reviewed_at': timestamp, 'reviewed_by': actor, 'decline_reason': reason}
     try:
         transact([
@@ -300,6 +427,11 @@ def action(order_id, payload, actor):
     if int(order['version']) != expected:
         raise ApiError(409, 'This order changed. Reload it before trying again.')
     kind = payload.get('action')
+    if kind == 'CAPTURE_STRIPE':
+        capture_stripe(order)
+        return public_order(order)
+    if kind == 'REFUND_STRIPE':
+        return refund_stripe(order, expected, actor)
     if order['order_status'] in ('COMPLETED', 'CANCELED'):
         raise ApiError(409, 'This order is closed.')
     timestamp = now()
@@ -307,6 +439,8 @@ def action(order_id, payload, actor):
     if kind == 'START_PROCESSING' and order['order_status'] == 'CONFIRMED':
         order.update(order_status='PROCESSING', fulfillment_status='PROCESSING', status_pk='PROCESSING')
     elif kind in ('RECORD_PAYMENT', 'PICKED_UP_AND_PAY'):
+        if order.get('payment_provider') == 'stripe':
+            raise ApiError(409, 'Stripe payments cannot be recorded manually.')
         if order['payment_status'] != 'UNPAID':
             raise ApiError(409, 'Payment has already been recorded.')
         if kind == 'PICKED_UP_AND_PAY' and not (order['fulfillment_method'] == 'PICKUP' and order['fulfillment_status'] == 'READY_FOR_PICKUP'):
@@ -335,6 +469,8 @@ def action(order_id, payload, actor):
         order.update(fulfillment_status='PICKED_UP', order_status='COMPLETED', status_pk='COMPLETED')
         order.pop('fulfillment_pk', None)
     elif kind == 'CANCEL' and order['fulfillment_status'] not in ('SHIPPED', 'DELIVERED', 'PICKED_UP'):
+        if order.get('payment_provider') == 'stripe' and order['payment_status'] not in ('PAID', 'FAILED'):
+            raise ApiError(409, 'Resolve the Stripe capture before canceling this order.')
         order.update(order_status='CANCELED', status_pk='CANCELED', cancel_reason=text(payload.get('reason'), 'Cancellation reason'),
                      refund_follow_up=order['payment_status'] == 'PAID')
         order.pop('fulfillment_pk', None)
@@ -385,6 +521,9 @@ def lambda_handler(event, _context):
         if route == 'GET /admin/order-requests/{id}':
             req = get_request(identifier(path.get('id'), 'Request ID'))
             try:
+                if req.get('payment_provider') == 'stripe':
+                    preview = {'items': req['items'], 'quoteToken': '', 'subtotal_cents': int(req['subtotal_cents'])}
+                    return response(200, {'request': req, 'preview': preview}, origin)
                 items, _, digest = quote(req)
                 preview = {'items': items, 'quoteToken': digest, 'subtotal_cents': sum(x['line_total_cents'] for x in items)}
                 return response(200, {'request': req, 'preview': preview}, origin)

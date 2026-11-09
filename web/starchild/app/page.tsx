@@ -171,7 +171,7 @@ export default async function Home() {
         </div>
         <div className="footer-links">
           <Link href="/shop">Shop</Link>
-          <Link href="/checkout">Order request</Link>
+          <Link href="/checkout">Checkout</Link>
         </div>
         <p className="copyright">© 2026 Starchild Clothing</p>
       </footer>

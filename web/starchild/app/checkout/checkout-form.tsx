@@ -2,199 +2,116 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import type { FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckoutForm as StripeForm, CheckoutFormProvider, useCheckoutForm } from "@stripe/react-stripe-js/checkout";
+import { loadStripe } from "@stripe/stripe-js";
 import { useCart } from "../cart";
 
-type OrderResponse = {
-  orderReference?: string;
-  message?: string;
-};
+const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
+const attemptStorageKey = "starchild-checkout-attempt";
+const formatPrice = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 
-function formatPrice(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
+type Attempt = { id: string; bag: string };
+type SessionResponse = { clientSecret?: string; message?: string };
+type StatusResponse = { status: string; orderReference?: string; message?: string };
 
-function fieldValue(formData: FormData, name: string) {
-  return String(formData.get(name) ?? "").trim();
+function PaymentForm() {
+  const checkout = useCheckoutForm();
+  const [error, setError] = useState("");
+  if (checkout.type === "error") return <p className="checkout-error" role="alert">{checkout.error.message}</p>;
+  return <><StripeForm onConfirm={async (event) => {
+    if (checkout.type !== "success") return;
+    setError("");
+    try { await checkout.checkout.confirm({ formConfirmEvent: event }); }
+    catch { setError("We could not finish checkout. Please try again."); }
+  }} />{error ? <p className="checkout-error" role="alert">{error}</p> : null}</>;
 }
 
 export default function CheckoutForm() {
   const { items, hydrated, subtotal, updateQuantity, removeItem, clearCart } = useCart();
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [orderNumber, setOrderNumber] = useState("");
-  const [submissionId, setSubmissionId] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [clientSecret, setClientSecret] = useState("");
+  const [attempt, setAttempt] = useState<Attempt | null>(null);
+  const [started, setStarted] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [orderReference, setOrderReference] = useState("");
+  const [captured, setCaptured] = useState(false);
+  const [returnUnknown, setReturnUnknown] = useState(false);
+  const [error, setError] = useState("");
+  const apiBase = process.env.NEXT_PUBLIC_PAYMENTS_API_URL;
+  const bag = useMemo(() => JSON.stringify(items.map(({ productSlug, color, size, quantity }) => ({ productSlug, color, size, quantity }))), [items]);
   const shipping = subtotal >= 100 ? 0 : 8;
-  const total = subtotal + shipping;
+  const stripeOptions = useMemo(() => ({ clientSecret, appearance: { theme: "flat" as const, variables: { colorPrimary: "#10172b", colorText: "#10172b", fontFamily: "Arial, sans-serif", borderRadius: "4px" } } }), [clientSecret]);
 
-  async function submitOrder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (submitting || !items.length) return;
-
-    const form = event.currentTarget;
-    if (!form.reportValidity()) return;
-
-    const apiUrl = process.env.NEXT_PUBLIC_ORDERS_API_URL;
-    if (!apiUrl) {
-      setError("Order requests are temporarily unavailable. Please try again shortly.");
-      return;
-    }
-
-    const formData = new FormData(form);
-    const requestId = submissionId || crypto.randomUUID();
-    if (!submissionId) setSubmissionId(requestId);
-
-    setSubmitting(true);
-    setError(null);
-
+  const checkStatus = useCallback(async (current: Attempt) => {
+    if (!apiBase) return;
     try {
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId: requestId,
-          website: fieldValue(formData, "website"),
-          customer: {
-            email: fieldValue(formData, "email"),
-            firstName: fieldValue(formData, "firstName"),
-            lastName: fieldValue(formData, "lastName"),
-            phone: fieldValue(formData, "phone"),
-            address: fieldValue(formData, "address"),
-            addressLine2: fieldValue(formData, "addressLine2"),
-            city: fieldValue(formData, "city"),
-            state: fieldValue(formData, "state"),
-            postalCode: fieldValue(formData, "postalCode"),
-            country: fieldValue(formData, "country"),
-            notes: fieldValue(formData, "notes"),
-          },
-          items: items.map(({ productSlug, color, size, quantity }) => ({
-            productSlug,
-            color,
-            size,
-            quantity,
-          })),
-        }),
-      });
-
-      const result = await response.json().catch(() => ({})) as OrderResponse;
-      if (!response.ok || !result.orderReference) {
-        throw new Error(result.message || "We could not submit your order request. Please try again.");
+      const sessionId = new URLSearchParams(window.location.search).get("session_id") || "";
+      const response = await fetch(`${apiBase}/checkout/sessions/${encodeURIComponent(current.id)}?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+      const result = await response.json() as StatusResponse;
+      if (!response.ok) throw new Error(result.message || "We could not check your order.");
+      if (["AUTHORIZED", "PAID"].includes(result.status) && result.orderReference) {
+        if (current.bag === bag) clearCart();
+        sessionStorage.removeItem(attemptStorageKey);
+        setCaptured(result.status === "PAID"); setOrderReference(result.orderReference); setChecking(false);
+      } else if (["CANCELED", "UPDATED"].includes(result.status)) {
+        sessionStorage.removeItem(attemptStorageKey); setChecking(false); setReturnUnknown(true); setError("Your order status has changed. Please check your email or contact us for help.");
+      } else if (result.status === "EXPIRED") {
+        sessionStorage.removeItem(attemptStorageKey);
+        setChecking(false); setError("This checkout expired. Please start again.");
       }
+    } catch { setError("We are still checking your order. Please refresh this page or contact us if this continues."); }
+  }, [apiBase, bag, clearCart]);
 
-      setOrderNumber(result.orderReference);
-      clearCart();
-      setSubmitted(true);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We could not submit your order request. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+  useEffect(() => {
+    if (!hydrated || !new URLSearchParams(window.location.search).has("session_id")) return;
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(attemptStorageKey) || "null") as Attempt | null;
+      if (stored?.id && stored.bag) { setAttempt(stored); setChecking(true); }
+      else { setReturnUnknown(true); setError("Please check your email for your order status or contact us before placing another order."); }
+    } catch { setReturnUnknown(true); setError("Please check your email for your order status or contact us before placing another order."); }
+  }, [hydrated]);
+
+  useEffect(() => {
+    if (!checking || !attempt) return;
+    void checkStatus(attempt);
+    const timer = window.setInterval(() => void checkStatus(attempt), 4000);
+    return () => window.clearInterval(timer);
+  }, [attempt, checking, checkStatus]);
+
+  async function startCheckout() {
+    if (!apiBase || !stripePromise) { setError("Checkout is temporarily unavailable. Please try again shortly."); return; }
+    setStarted(true); setError("");
+    try {
+      let current: Attempt | null = null;
+      try { current = JSON.parse(sessionStorage.getItem(attemptStorageKey) || "null") as Attempt | null; } catch { /* Start a new attempt. */ }
+      if (!current?.id || current.bag !== bag) current = { id: crypto.randomUUID(), bag };
+      sessionStorage.setItem(attemptStorageKey, JSON.stringify(current));
+      setAttempt(current);
+      const response = await fetch(`${apiBase}/checkout/sessions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attemptId: current.id, items: JSON.parse(bag) }) });
+      const result = await response.json() as SessionResponse;
+      if (!response.ok || !result.clientSecret) throw new Error(result.message || "We could not start checkout. Please try again.");
+      setClientSecret(result.clientSecret);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "We could not start checkout. Please try again."); setStarted(false); }
   }
 
-  if (submitted) {
-    return (
-      <section className="order-confirmation" aria-labelledby="confirmation-title">
-        <p className="eyebrow">Order request received</p>
-        <h1 id="confirmation-title">You&apos;re in the orbit.</h1>
-        <p className="confirmation-lede">Your order request <strong>{orderNumber}</strong> is with the Starchild team.</p>
-        <div className="confirmation-steps">
-          <p><span>01</span> We&apos;ll review availability and confirm your order.</p>
-          <p><span>02</span> You&apos;ll receive payment instructions after confirmation.</p>
-          <p><span>03</span> We&apos;ll share fulfillment details once everything is arranged.</p>
-        </div>
-        <p className="confirmation-note">This is not a payment receipt. Nothing has been charged today.</p>
-        <Link className="button button-primary" href="/shop">Keep shopping</Link>
-      </section>
-    );
-  }
+  if (orderReference) return <section className="order-confirmation" aria-labelledby="confirmation-title"><h1 id="confirmation-title">{captured ? "Your order is confirmed." : "Your order is under review."}</h1><p className="confirmation-lede">We received order <strong>{orderReference}</strong>. {captured ? "Your payment has been captured." : "A temporary hold is on your payment."}</p><p>{captured ? "You’ll receive an email with the details." : "We’ll check availability and capture payment when your order is confirmed. You’ll receive an email with the details."}</p><Link className="button button-primary" href="/shop">Keep shopping</Link></section>;
+  if (returnUnknown) return <section className="order-confirmation" aria-live="polite"><h1>Checking your order.</h1><p role="alert">{error}</p><Link className="button button-secondary" href="/">Return home</Link></section>;
+  if (checking) return <section className="order-confirmation" aria-live="polite"><h1>Checking your order.</h1><p>We’re confirming your payment authorization. Please keep this page open.</p>{error ? <p className="checkout-error" role="alert">{error}</p> : null}</section>;
+  if (hydrated && items.length === 0) return <section className="checkout-empty"><h1>Your orbit is empty.</h1><p>Choose a piece and select its size before checking out.</p><Link className="button button-primary" href="/shop">Explore the collection</Link></section>;
 
-  if (hydrated && items.length === 0) {
-    return (
-      <section className="checkout-empty" aria-labelledby="empty-bag-title">
-        <p className="eyebrow">Your bag</p>
-        <h1 id="empty-bag-title">Your orbit is empty.</h1>
-        <p>Choose a piece and select its size before submitting an order request.</p>
-        <Link className="button button-primary" href="/shop">Explore the collection</Link>
-      </section>
-    );
-  }
-
-  return (
-    <div className="checkout-layout">
-      <form className="checkout-form" onSubmit={submitOrder} aria-busy={submitting}>
-        <div className="checkout-intro">
-          <p className="eyebrow">Checkout</p>
-          <h1>One step closer.</h1>
-          <p>Submit your order request and we&apos;ll follow up with payment details once availability is confirmed.</p>
-        </div>
-
-        <fieldset className="checkout-section" disabled={submitting}>
-          <legend><span>01</span> Contact</legend>
-          <div className="form-grid">
-            <label className="field field-full">Email address<input name="email" type="email" autoComplete="email" maxLength={254} required /></label>
-            <label className="field">First name<input name="firstName" autoComplete="given-name" maxLength={80} required /></label>
-            <label className="field">Last name<input name="lastName" autoComplete="family-name" maxLength={80} required /></label>
-            <label className="field field-full">Phone number <em>For order updates</em><input name="phone" type="tel" autoComplete="tel" maxLength={30} required /></label>
-          </div>
-        </fieldset>
-
-        <fieldset className="checkout-section" disabled={submitting}>
-          <legend><span>02</span> Delivery</legend>
-          <div className="form-grid">
-            <label className="field field-full">Address<input name="address" autoComplete="street-address" maxLength={160} required /></label>
-            <label className="field field-full">Apartment, suite, etc. <em>Optional</em><input name="addressLine2" autoComplete="address-line2" maxLength={100} /></label>
-            <label className="field">City<input name="city" autoComplete="address-level2" maxLength={80} required /></label>
-            <label className="field">State or province<input name="state" autoComplete="address-level1" maxLength={80} required /></label>
-            <label className="field">Postal code<input name="postalCode" autoComplete="postal-code" maxLength={20} required /></label>
-            <label className="field">Country<select name="country" autoComplete="country" defaultValue="US"><option value="US">United States</option><option value="CA">Canada</option></select></label>
-            <label className="field field-full">Order notes <em>Optional</em><textarea name="notes" maxLength={500} rows={4} /></label>
-          </div>
-          <label className="shipping-choice"><input type="radio" name="shipping" value="standard" defaultChecked /><span><strong>Estimated standard shipping</strong><small>Final timing confirmed with your order</small></span><b>{shipping === 0 ? "Free" : formatPrice(shipping)}</b></label>
-        </fieldset>
-
-        <fieldset className="checkout-section checkout-payment-section" disabled={submitting}>
-          <legend><span>03</span> Payment</legend>
-          <div className="manual-payment-card">
-            <p className="manual-payment-title">No payment is collected online</p>
-            <p>After your request is submitted, Starchild Clothing will contact you to confirm availability, payment, shipping or pickup, and fulfillment.</p>
-          </div>
-        </fieldset>
-
-        <div className="honeypot" aria-hidden="true"><label>Website<input name="website" tabIndex={-1} autoComplete="off" /></label></div>
+  return <div className="checkout-layout">
+    <section className="checkout-form" aria-labelledby="checkout-title">
+      <div className="checkout-intro"><h1 id="checkout-title">One step closer.</h1><p>Authorize your payment now. We’ll confirm availability before charging you.</p></div>
+      <div className="checkout-section"><h2>Contact, delivery &amp; payment</h2><p>Choose Apple Pay, Google Pay, or a card. Tax and the final total appear before you authorize payment.</p>
+        {!clientSecret ? <button className="button button-primary checkout-submit" type="button" onClick={() => void startCheckout()} disabled={!hydrated || started || !items.length}>{started ? "Preparing checkout…" : "Continue to secure checkout"}</button> : stripePromise ? <CheckoutFormProvider stripe={stripePromise} options={stripeOptions}><PaymentForm /></CheckoutFormProvider> : null}
         {error ? <p className="checkout-error" role="alert">{error}</p> : null}
-        <button className="button button-primary checkout-submit" type="submit" disabled={!hydrated || submitting || !items.length}>
-          {submitting ? "Submitting request…" : `Submit order request — ${formatPrice(total)}`}
-        </button>
-        <p className="checkout-terms">By submitting, you agree that Starchild may contact you about this order. Nothing will be charged until payment is arranged.</p>
-      </form>
-
-      <aside className="order-summary" aria-labelledby="order-summary-title">
-        <div className="order-summary-sticky">
-          <div className="summary-heading"><h2 id="order-summary-title">Your bag</h2><Link href="/shop">Continue shopping</Link></div>
-          <div className="summary-items">
-            {items.map((item) => (
-              <article className="summary-item" key={`${item.productSlug}:${item.color}:${item.size}`}>
-                <div className="summary-image"><Image src={item.image} alt={item.alt} fill sizes="84px" /></div>
-                <div>
-                  <h3>{item.name}</h3>
-                  <p>{item.color} / {item.size}</p>
-                  <div className="summary-quantity">
-                    <button onClick={() => updateQuantity(item.productSlug, item.color, item.size, item.quantity - 1)} type="button" aria-label={`Decrease ${item.name} quantity`}>−</button>
-                    <output aria-live="polite">{item.quantity}</output>
-                    <button onClick={() => updateQuantity(item.productSlug, item.color, item.size, item.quantity + 1)} type="button" aria-label={`Increase ${item.name} quantity`}>+</button>
-                  </div>
-                  <button className="summary-remove" onClick={() => removeItem(item.productSlug, item.color, item.size)} type="button">Remove</button>
-                </div>
-                <strong>{formatPrice(item.unitPrice * item.quantity)}</strong>
-              </article>
-            ))}
-          </div>
-          <dl className="summary-totals"><div><dt>Subtotal</dt><dd>{formatPrice(subtotal)}</dd></div><div><dt>Estimated shipping</dt><dd>{shipping === 0 ? "Free" : formatPrice(shipping)}</dd></div><div className="summary-total"><dt>Estimated total</dt><dd>{formatPrice(total)}</dd></div></dl>
-          <p className="summary-reassurance">Availability, shipping, and payment are confirmed personally after submission.</p>
-        </div>
-      </aside>
-    </div>
-  );
+      </div>
+      <p className="checkout-terms">A temporary hold is placed when you complete checkout. Payment is captured after we verify availability.</p>
+    </section>
+    <aside className="order-summary" aria-labelledby="order-summary-title"><div className="order-summary-sticky"><div className="summary-heading"><h2 id="order-summary-title">Your bag</h2><Link href="/shop">Continue shopping</Link></div>
+      <div className="summary-items">{items.map((item) => <article className="summary-item" key={`${item.productSlug}:${item.color}:${item.size}`}><div className="summary-image"><Image src={item.image} alt={item.alt} fill sizes="84px" /></div><div><h3>{item.name}</h3><p>{item.color} / {item.size}</p><div className="summary-quantity"><button onClick={() => updateQuantity(item.productSlug, item.color, item.size, item.quantity - 1)} disabled={started} type="button" aria-label={`Decrease ${item.name} quantity`}>−</button><output aria-live="polite">{item.quantity}</output><button onClick={() => updateQuantity(item.productSlug, item.color, item.size, item.quantity + 1)} disabled={started} type="button" aria-label={`Increase ${item.name} quantity`}>+</button></div><button className="summary-remove" disabled={started} onClick={() => removeItem(item.productSlug, item.color, item.size)} type="button">Remove</button></div><strong>{formatPrice(item.unitPrice * item.quantity)}</strong></article>)}</div>
+      <dl className="summary-totals"><div><dt>Estimated subtotal</dt><dd>{formatPrice(subtotal)}</dd></div><div><dt>Estimated shipping</dt><dd>{shipping === 0 ? "Free" : formatPrice(shipping)}</dd></div><div><dt>Tax</dt><dd>Calculated at checkout</dd></div></dl><p className="summary-reassurance">Prices and the final total are confirmed in secure checkout.</p>
+    </div></aside>
+  </div>;
 }
