@@ -73,6 +73,12 @@ def create_session(payload, origin):
             raise BadRequest('This checkout attempt cannot be reused for a different bag.')
         if saved.get('checkout_status') not in ('CREATING', 'OPEN'):
             raise BadRequest('This checkout attempt is no longer open.')
+        if saved['checkout_status'] == 'OPEN':
+            stripe, _ = client()
+            session = plain(stripe.checkout.Session.retrieve(saved['checkout_session_id']))
+            if session.get('status') != 'open' or not session.get('client_secret'):
+                raise BadRequest('This checkout is no longer open. Check your order status before starting again.')
+            return {'clientSecret': session['client_secret'], 'attemptId': attempt}
         items = saved['items']
     else:
         items = validation._validate_items({'items': raw_items})
@@ -96,14 +102,14 @@ def create_session(payload, origin):
                    'description': f"{item['color']} / {item['size']}", 'tax_code': TAX_CODE}},
                    'quantity': int(item['quantity'])} for item in items]
     session = plain(stripe.checkout.Session.create(
-        mode='payment', ui_mode='form', line_items=line_items, payment_method_types=['card'],
+        mode='payment', ui_mode='form', line_items=line_items,
         automatic_tax={'enabled': True}, shipping_address_collection={'allowed_countries': ['US', 'CA']},
         phone_number_collection={'enabled': True},
         shipping_options=[{'shipping_rate_data': {'type': 'fixed_amount', 'fixed_amount': {'amount': int(saved['shipping_cents']), 'currency': 'usd'},
                            'display_name': 'Standard shipping', 'tax_behavior': 'exclusive'}}],
         payment_intent_data={'capture_method': 'manual', 'metadata': {'starchild_attempt_id': attempt}},
         metadata={'starchild_attempt_id': attempt}, return_url=f'{origin}/checkout?session_id={{CHECKOUT_SESSION_ID}}',
-        idempotency_key=f'checkout-{attempt}'))
+        idempotency_key=f'checkout-v2-{attempt}'))
     table.update_item(Key={'submission_id': attempt},
         UpdateExpression='SET checkout_status = :open, checkout_session_id = :session',
         ConditionExpression='checkout_status = :creating OR (checkout_status = :open AND checkout_session_id = :session)',

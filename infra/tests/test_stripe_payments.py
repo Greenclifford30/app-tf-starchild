@@ -103,14 +103,34 @@ class StripePaymentsTests(unittest.TestCase):
                 self.assertEqual(int.from_bytes(header[18:20], 'little'), 183, name)
 
     def test_checkout_prices_are_server_derived_and_retry_is_idempotent(self):
-        self.create(); self.create()
+        self.create()
+        self.stripe.checkout.Session.retrieve.return_value = {'id': 'cs_test', 'status': 'open', 'client_secret': 'secret'}
+        self.create()
+        self.assertEqual(self.stripe.checkout.Session.create.call_count, 1)
+        self.stripe.checkout.Session.retrieve.assert_called_once_with('cs_test')
         options = self.stripe.checkout.Session.create.call_args.kwargs
         self.assertEqual(options['line_items'][0]['price_data']['unit_amount'], 1500)
         self.assertEqual(options['shipping_options'][0]['shipping_rate_data']['fixed_amount']['amount'], 800)
         self.assertEqual(options['payment_intent_data']['capture_method'], 'manual')
-        self.assertEqual(options['idempotency_key'], 'checkout-' + self.attempt)
+        self.assertNotIn('payment_method_types', options)
+        self.assertEqual(options['idempotency_key'], 'checkout-v2-' + self.attempt)
         with self.assertRaises(handler.BadRequest):
             handler.create_session({**self.payload, 'items': []}, 'https://shop.example')
+
+    def test_existing_open_session_is_reused_after_checkout_configuration_change(self):
+        self.create()
+        self.stripe.checkout.Session.create.reset_mock()
+        self.stripe.checkout.Session.retrieve.return_value = {'id': 'cs_test', 'status': 'open', 'client_secret': 'original-secret'}
+        result = self.create()
+        self.assertEqual(result['clientSecret'], 'original-secret')
+        self.stripe.checkout.Session.create.assert_not_called()
+
+    def test_completed_existing_session_is_not_recreated(self):
+        self.create()
+        self.stripe.checkout.Session.retrieve.return_value = {'id': 'cs_test', 'status': 'complete', 'client_secret': None}
+        with self.assertRaises(handler.BadRequest):
+            self.create()
+        self.assertEqual(self.stripe.checkout.Session.create.call_count, 1)
 
     def test_authorization_stores_tax_and_replay_does_not_duplicate_notifications(self):
         self.authorize(); handler.authorize('cs_test')
