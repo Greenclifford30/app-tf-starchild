@@ -10,6 +10,7 @@ LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.INFO)
 TABLE = os.environ['CUSTOMER_NOTIFICATIONS_TABLE']
 SENDER = os.environ.get('NOTIFICATION_FROM', 'Starchild <orders@starchildclo.com>')
+OPERATOR = os.environ.get('NOTIFICATION_EMAIL', '')
 DB = boto3.resource('dynamodb')
 SES = boto3.client('ses')
 DESERIALIZER = TypeDeserializer()
@@ -24,7 +25,23 @@ def message(job):
     kind = job['kind']
     reference = order.get('order_number') or order['order_reference']
     lines = [f"Hello {order['customer']['first_name']},", '']
-    if kind == 'REQUEST_RECEIVED':
+    if kind in ('STRIPE_AUTHORIZED', 'OPERATOR_AUTHORIZED'):
+        title = 'Payment authorized, awaiting review'
+        lines += ['The checkout is awaiting an availability review. A temporary payment hold was placed; no payment has been captured.', '', 'Items:']
+        lines += [f"- {i['quantity']} x {i['name']} / {i['color']} / {i['size']} ({money(i['line_total_cents'])})" for i in order['items']]
+        lines += ['', f"Subtotal: {money(order['subtotal_cents'])}", f"Shipping: {money(order['shipping_cents'])}", f"Tax: {money(order['tax_cents'])}", f"Authorized total: {money(order['total_cents'])}"]
+        if kind == 'OPERATOR_AUTHORIZED':
+            lines += ['', 'Review availability and capture the hold in the admin.']
+    elif kind == 'OPERATOR_REFUND_FAILED':
+        title = 'Refund failed'
+        lines += ['A Stripe refund failed. Review the order in Stripe and arrange another way to refund the customer.']
+    elif kind == 'STRIPE_PAID':
+        title = 'Your order is confirmed'
+        lines += [f"Your order is confirmed and payment of {money(order['total_cents'])} has been captured."]
+    elif kind == 'STRIPE_REFUNDED':
+        title = 'Your payment was refunded'
+        lines += [f"Your payment of {money(order['total_cents'])} has been refunded."]
+    elif kind == 'REQUEST_RECEIVED':
         title = 'Order request received'
         lines += ['We received your order request and will review availability. No payment has been collected.', '', 'Requested items:']
         lines += [f"- {i['quantity']} x {i['name']} / {i['color']} / {i['size']} ({money(i['line_total_cents'])})" for i in order['items']]
@@ -32,6 +49,8 @@ def message(job):
     elif kind == 'REQUEST_DECLINED':
         title = 'Order request update'
         lines += ['We are unable to confirm your request.', f"Reason: {order['decline_reason']}"]
+        if order.get('payment_provider') == 'stripe':
+            lines += ['Your payment authorization has been canceled.']
     elif kind == 'ORDER_CONFIRMED':
         title = 'Your order is confirmed'
         lines += ['Your order is confirmed. Payment has not yet been recorded.', '', 'Items:']
@@ -77,7 +96,7 @@ def process(notification_id):
         return
     try:
         subject, body = message(job)
-        result = SES.send_email(Source=SENDER, Destination={'ToAddresses': [job['snapshot']['customer']['email']]},
+        result = SES.send_email(Source=SENDER, Destination={'ToAddresses': [OPERATOR if job['kind'].startswith('OPERATOR_') else job['snapshot']['customer']['email']]},
                                 Message={'Subject': {'Data': subject, 'Charset': 'UTF-8'}, 'Body': {'Text': {'Data': body, 'Charset': 'UTF-8'}}})
         table.update_item(Key={'notification_id': notification_id}, UpdateExpression='SET #s = :sent, message_id = :id, updated_at = :at REMOVE last_error',
                           ExpressionAttributeNames={'#s': 'status'}, ExpressionAttributeValues={':sent': 'SENT', ':id': result['MessageId'], ':at': datetime.now(timezone.utc).isoformat()})

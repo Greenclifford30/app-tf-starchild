@@ -73,7 +73,7 @@ resource "aws_iam_role_policy" "admin_orders_data" {
     Version = "2012-10-17"
     Statement = [
       { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Query"], Resource = [aws_dynamodb_table.order_requests.arn, "${aws_dynamodb_table.order_requests.arn}/index/review"] },
-      { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"], Resource = [aws_dynamodb_table.confirmed_orders.arn, "${aws_dynamodb_table.confirmed_orders.arn}/index/*"] },
+      { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query"], Resource = [aws_dynamodb_table.confirmed_orders.arn, "${aws_dynamodb_table.confirmed_orders.arn}/index/*"] },
       { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:ConditionCheckItem"], Resource = aws_dynamodb_table.products.arn },
       { Effect = "Allow", Action = ["dynamodb:PutItem"], Resource = aws_dynamodb_table.customer_notifications.arn }
     ]
@@ -99,15 +99,17 @@ resource "aws_lambda_function" "admin_orders" {
   runtime          = "python3.13"
   architectures    = ["arm64"]
   memory_size      = 256
-  timeout          = 10
+  timeout          = 25
+  layers           = var.stripe_payments_enabled ? [aws_lambda_layer_version.payments[0].arn, aws_lambda_layer_version.payment_helpers[0].arn] : []
   environment {
     variables = {
-      ALLOWED_ORIGINS        = join(",", local.cors_allowed_origins)
-      REQUESTS_TABLE         = aws_dynamodb_table.order_requests.name
-      CONFIRMED_ORDERS_TABLE = aws_dynamodb_table.confirmed_orders.name
-      PRODUCTS_TABLE         = aws_dynamodb_table.products.name
+      ALLOWED_ORIGINS              = join(",", local.cors_allowed_origins)
+      REQUESTS_TABLE               = aws_dynamodb_table.order_requests.name
+      CONFIRMED_ORDERS_TABLE       = aws_dynamodb_table.confirmed_orders.name
+      PRODUCTS_TABLE               = aws_dynamodb_table.products.name
       CUSTOMER_NOTIFICATIONS_TABLE = aws_dynamodb_table.customer_notifications.name
-      PAYMENT_INSTRUCTIONS = var.payment_instructions
+      PAYMENT_INSTRUCTIONS         = var.payment_instructions
+      STRIPE_SECRET_ARN            = try(aws_secretsmanager_secret.stripe[0].arn, "")
     }
   }
   depends_on = [aws_cloudwatch_log_group.admin_orders, aws_iam_role_policy_attachment.admin_orders_logs, aws_iam_role_policy.admin_orders_data]
@@ -118,7 +120,7 @@ resource "aws_apigatewayv2_integration" "admin_orders" {
   integration_uri        = aws_lambda_function.admin_orders.invoke_arn
   integration_method     = "POST"
   payload_format_version = "2.0"
-  timeout_milliseconds   = 10000
+  timeout_milliseconds   = 29000
 }
 resource "aws_apigatewayv2_route" "admin_orders" {
   for_each = toset([
