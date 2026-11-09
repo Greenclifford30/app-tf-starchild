@@ -20,6 +20,8 @@ crash.*.log
 # Terraform plans and packaged functions
 *.tfplan
 *.zip
+# Versioned Stripe Lambda dependencies used by Terraform Cloud.
+!infra/artifacts/stripe-python-3.13-arm64.zip
 
 # Application and Python build artifacts
 .next/

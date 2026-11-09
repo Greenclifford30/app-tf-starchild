@@ -100,7 +100,7 @@ resource "aws_lambda_function" "admin_orders" {
   architectures    = ["arm64"]
   memory_size      = 256
   timeout          = 25
-  layers           = var.stripe_payments_enabled ? [aws_lambda_layer_version.payments[0].arn] : []
+  layers           = var.stripe_payments_enabled ? [aws_lambda_layer_version.payments[0].arn, aws_lambda_layer_version.payment_helpers[0].arn] : []
   environment {
     variables = {
       ALLOWED_ORIGINS              = join(",", local.cors_allowed_origins)
