@@ -1,5 +1,6 @@
 """Product catalog API handler for the Starchild storefront."""
 import base64
+import hashlib
 import json
 import os
 import re
@@ -183,8 +184,44 @@ def _public_product(item):
 
 def _admin_product(item):
     output = _public_product(item)
-    output.update({"status": item["catalog_status"], "imageKey": item["image_key"], "alternateImageKey": item.get("alternate_image_key"), "createdAt": item.get("created_at"), "updatedAt": item.get("updated_at")})
+    output.update({"status": item["catalog_status"], "imageKey": item["image_key"], "alternateImageKey": item.get("alternate_image_key"), "createdAt": item.get("created_at"), "updatedAt": item.get("updated_at"),
+                   "inventory": list(item.get("inventory", {}).values())})
     return output
+
+
+def _variant_key(color, size):
+    encoded = json.dumps([color, size], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _set_inventory(table, slug, payload):
+    color = _text(payload.get("color"), "color", 100)
+    size = _text(payload.get("size"), "size", 100)
+    count = payload.get("onHand")
+    if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 1_000_000:
+        raise RequestError("onHand must be a nonnegative whole number no greater than 1000000.")
+    existing = table.get_item(Key={"slug": slug}, ConsistentRead=True).get("Item")
+    if not existing:
+        return None
+    if color not in existing.get("colors", []) or size not in existing.get("sizes", []):
+        raise RequestError("The selected product variant does not exist.")
+    original = existing.get("inventory")
+    inventory = dict(original or {})
+    key = _variant_key(color, size)
+    reserved = int(inventory.get(key, {}).get("reserved", 0))
+    if count < reserved:
+        raise RequestError("Stock cannot be reduced below the quantity already reserved.")
+    inventory[key] = {"color": color, "size": size, "onHand": count, "reserved": reserved}
+    values = {":inventory": inventory, ":colors": existing["colors"], ":sizes": existing["sizes"]}
+    condition = "attribute_exists(slug) AND colors = :colors AND sizes = :sizes AND "
+    if original is None:
+        condition += "attribute_not_exists(inventory)"
+    else:
+        condition += "inventory = :previous"
+        values[":previous"] = original
+    result = table.update_item(Key={"slug": slug}, UpdateExpression="SET inventory = :inventory",
+                               ConditionExpression=condition, ExpressionAttributeValues=values, ReturnValues="ALL_NEW")
+    return result["Attributes"]
 
 
 def _route(event):
@@ -232,11 +269,24 @@ def lambda_handler(event, _context):
             item.update({"created_at": now, "updated_at": now})
             table.put_item(Item=item, ConditionExpression="attribute_not_exists(slug)")
             return _response(201, {"product": _admin_product(item)}, origin)
+        if route == "PUT /products/{slug}/inventory":
+            item = _set_inventory(table, slug, _body(event))
+            if item is None:
+                return _response(404, {"message": "Product not found."}, origin)
+            return _response(200, {"product": _admin_product(item)}, origin)
         if route == "PUT /products/{slug}":
             existing = table.get_item(Key={"slug": slug}, ConsistentRead=True).get("Item")
             if not existing:
                 return _response(404, {"message": "Product not found."}, origin)
             item = _product(_body(event), slug)
+            for variant in existing.get("inventory", {}).values():
+                if int(variant.get("reserved", 0)) and (variant["color"] not in item["colors"] or variant["size"] not in item["sizes"]):
+                    raise RequestError("A variant with reserved stock cannot be removed.")
+            if "inventory" in existing:
+                remaining = {key: variant for key, variant in existing["inventory"].items()
+                             if variant["color"] in item["colors"] and variant["size"] in item["sizes"]}
+                if remaining != existing["inventory"]:
+                    item["inventory"] = remaining
             # Update only catalog-owned fields. Replacing the whole record can
             # discard inventory or other fields written since the read above.
             item.pop("slug")
@@ -244,8 +294,14 @@ def lambda_handler(event, _context):
             names = {f"#field{index}": name for index, name in enumerate(item)}
             values = {f":value{index}": value for index, value in enumerate(item.values())}
             expression = "SET " + ", ".join(f"#field{index} = :value{index}" for index in range(len(item)))
+            condition = "attribute_exists(slug) AND "
+            if "inventory" in existing:
+                condition += "inventory = :inventory_snapshot"
+                values[":inventory_snapshot"] = existing["inventory"]
+            else:
+                condition += "attribute_not_exists(inventory)"
             result = table.update_item(Key={"slug": slug}, UpdateExpression=expression,
-                                       ConditionExpression="attribute_exists(slug)",
+                                       ConditionExpression=condition,
                                        ExpressionAttributeNames=names, ExpressionAttributeValues=values,
                                        ReturnValues="ALL_NEW")
             return _response(200, {"product": _admin_product(result["Attributes"])}, origin)
@@ -256,6 +312,6 @@ def lambda_handler(event, _context):
         return _response(400, {"message": str(exc)}, origin)
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return _response(409, {"message": "A product with that slug already exists."}, origin)
+            return _response(409, {"message": "The product or its inventory changed. Reload and try again."}, origin)
         raise
     return _response(404, {"message": "Route not found."}, origin)

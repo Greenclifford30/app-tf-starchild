@@ -1,11 +1,15 @@
+locals {
+  public_api_base_url = var.enable_api_custom_domain ? "https://${aws_apigatewayv2_domain_name.api[0].domain_name}" : aws_apigatewayv2_api.orders.api_endpoint
+}
+
 output "orders_api_url" {
   description = "Set this exact value as NEXT_PUBLIC_ORDERS_API_URL in Amplify."
-  value       = "${aws_apigatewayv2_api.orders.api_endpoint}/orders"
+  value       = "${local.public_api_base_url}/orders"
 }
 
 output "products_api_url" {
   description = "Set this exact value as PRODUCTS_API_URL in Amplify."
-  value       = aws_apigatewayv2_api.orders.api_endpoint
+  value       = local.public_api_base_url
 }
 
 output "products_table_name" {

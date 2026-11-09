@@ -167,7 +167,7 @@ resource "aws_cloudwatch_metric_alarm" "payments_errors" {
   alarm_actions       = [aws_sns_topic.customer_notification_alerts.arn]
 }
 output "payments_api_url" {
-  value       = aws_apigatewayv2_api.orders.api_endpoint
+  value       = local.public_api_base_url
   description = "Base URL for NEXT_PUBLIC_PAYMENTS_API_URL."
 }
 output "stripe_secret_arn" {
@@ -175,7 +175,7 @@ output "stripe_secret_arn" {
   description = "Provision secret_key and webhook_secret JSON directly in Secrets Manager."
 }
 output "stripe_webhook_url" {
-  value = var.stripe_payments_enabled ? "${aws_apigatewayv2_api.orders.api_endpoint}/stripe/webhook" : null
+  value = var.stripe_payments_enabled ? "${local.public_api_base_url}/stripe/webhook" : null
 }
 
 resource "aws_cloudwatch_metric_alarm" "payments_api_errors" {

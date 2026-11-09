@@ -41,6 +41,16 @@ class FakeTable:
     def update_item(self, Key, ConditionExpression, ExpressionAttributeValues, **kwargs):
         if Key["slug"] not in self.items:
             raise ClientError({"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem")
+        item = self.items[Key["slug"]]
+        if ("attribute_not_exists(inventory)" in ConditionExpression and "inventory" in item or
+                ":inventory_snapshot" in ExpressionAttributeValues and item.get("inventory") != ExpressionAttributeValues[":inventory_snapshot"] or
+                ":previous" in ExpressionAttributeValues and item.get("inventory") != ExpressionAttributeValues[":previous"] or
+                ":colors" in ExpressionAttributeValues and item.get("colors") != ExpressionAttributeValues[":colors"] or
+                ":sizes" in ExpressionAttributeValues and item.get("sizes") != ExpressionAttributeValues[":sizes"]):
+            raise ClientError({"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem")
+        if ":inventory" in ExpressionAttributeValues:
+            item["inventory"] = deepcopy(ExpressionAttributeValues[":inventory"])
+            return {"Attributes": deepcopy(item)}
         if "ExpressionAttributeNames" in kwargs:
             for name, field in kwargs["ExpressionAttributeNames"].items():
                 self.items[Key["slug"]][field] = deepcopy(ExpressionAttributeValues[name.replace("#field", ":value")])
@@ -147,9 +157,37 @@ class ProductHandlerTests(unittest.TestCase):
 
         self.table.update_item = update_after_inventory_change
         response = products_lambda.lambda_handler(event("PUT /products/{slug}", payload(name="Updated Tee"), slug="test-tee", admin=True), None)
-        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(response["statusCode"], 409)
         self.assertEqual(self.table.items["test-tee"]["inventory"], {"white-s": {"on_hand": 4, "reserved": 2}})
-        self.assertEqual(json.loads(response["body"])["product"]["name"], "Updated Tee")
+        self.assertEqual(self.table.items["test-tee"]["name"], "Test Tee")
+
+    def test_admin_can_set_variant_count_and_cannot_reduce_below_reserved(self):
+        products_lambda.lambda_handler(event("POST /products", payload(), admin=True), None)
+        route = "PUT /products/{slug}/inventory"
+        stock = {"color": "White", "size": "S", "onHand": 5}
+        self.assertEqual(products_lambda.lambda_handler(event(route, stock, slug="test-tee"), None)["statusCode"], 403)
+        result = products_lambda.lambda_handler(event(route, stock, slug="test-tee", admin=True), None)
+        self.assertEqual(result["statusCode"], 200)
+        variant = json.loads(result["body"])["product"]["inventory"][0]
+        self.assertEqual((variant["onHand"], variant["reserved"]), (5, 0))
+        key = products_lambda._variant_key("White", "S")
+        self.table.items["test-tee"]["inventory"][key]["reserved"] = 3
+        stock["onHand"] = 2
+        self.assertEqual(products_lambda.lambda_handler(event(route, stock, slug="test-tee", admin=True), None)["statusCode"], 400)
+        self.assertEqual(self.table.items["test-tee"]["inventory"][key]["onHand"], 5)
+
+    def test_cannot_remove_reserved_variant(self):
+        products_lambda.lambda_handler(event("POST /products", payload(), admin=True), None)
+        self.table.items["test-tee"]["inventory"] = {"key": {"color": "White", "size": "S", "onHand": 3, "reserved": 1}}
+        result = products_lambda.lambda_handler(event("PUT /products/{slug}", payload(sizes=["M"]), slug="test-tee", admin=True), None)
+        self.assertEqual(result["statusCode"], 400)
+
+    def test_removing_unreserved_variant_discards_its_old_count(self):
+        products_lambda.lambda_handler(event("POST /products", payload(), admin=True), None)
+        self.table.items["test-tee"]["inventory"] = {"key": {"color": "White", "size": "S", "onHand": 3, "reserved": 0}}
+        result = products_lambda.lambda_handler(event("PUT /products/{slug}", payload(sizes=["M"]), slug="test-tee", admin=True), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(self.table.items["test-tee"]["inventory"], {})
 
     def test_upload_url_requires_admin_and_valid_content_type(self):
         response = products_lambda.lambda_handler(event("POST /product-images/upload-url", {"contentType": "image/png"}, admin=True), None)

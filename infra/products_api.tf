@@ -114,6 +114,14 @@ resource "aws_apigatewayv2_route" "update_product" {
   authorizer_id      = aws_apigatewayv2_authorizer.product_admin.id
 }
 
+resource "aws_apigatewayv2_route" "update_product_inventory" {
+  api_id             = aws_apigatewayv2_api.orders.id
+  route_key          = "PUT /products/{slug}/inventory"
+  target             = "integrations/${aws_apigatewayv2_integration.products.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.product_admin.id
+}
+
 resource "aws_apigatewayv2_route" "archive_product" {
   api_id             = aws_apigatewayv2_api.orders.id
   route_key          = "DELETE /products/{slug}"

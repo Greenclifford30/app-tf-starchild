@@ -3,14 +3,15 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type Detail = { label: string; value: string };
+type Inventory = { color: string; size: string; onHand: number; reserved: number };
 type CatalogProduct = {
   slug: string; name: string; category: string; image: string; imageKey: string; alternateImage?: string;
   alternateImageKey?: string; alt: string; homeSummary: string; story: string[]; priceCents: number;
   colors: string[]; sizes: string[]; availability: "In stock" | "Limited availability"; details: Detail[];
-  featured: boolean; sortOrder: number; status: "ACTIVE" | "ARCHIVED";
+  featured: boolean; sortOrder: number; status: "ACTIVE" | "ARCHIVED"; inventory?: Inventory[];
 };
 
-type Draft = Omit<CatalogProduct, "image" | "alternateImage" | "status"> & { imageKey: string; alternateImageKey: string };
+type Draft = Omit<CatalogProduct, "image" | "alternateImage" | "status" | "inventory"> & { imageKey: string; alternateImageKey: string };
 
 const blankDraft = (): Draft => ({
   slug: "", name: "", category: "", imageKey: "", alternateImageKey: "", alt: "", homeSummary: "", story: [""],
@@ -18,8 +19,12 @@ const blankDraft = (): Draft => ({
 });
 
 function productToDraft(product: CatalogProduct): Draft {
-  const { image, alternateImage, status, ...draft } = product;
-  return { ...draft, priceCents: product.priceCents / 100, alternateImageKey: product.alternateImageKey ?? "" };
+  return {
+    slug: product.slug, name: product.name, category: product.category, imageKey: product.imageKey,
+    alternateImageKey: product.alternateImageKey ?? "", alt: product.alt, homeSummary: product.homeSummary,
+    story: product.story, priceCents: product.priceCents / 100, colors: product.colors, sizes: product.sizes,
+    availability: product.availability, details: product.details, featured: product.featured, sortOrder: product.sortOrder,
+  };
 }
 
 function fieldList(value: string[]) { return value.map((item) => item.trim()).filter(Boolean); }
@@ -186,9 +191,31 @@ export default function CatalogManager() {
         <fieldset><legend>Product story</legend><p className="catalog-field-description">Each paragraph is shown in the product detail page.</p><Repeater label="Story paragraphs" values={draft.story} multiline onChange={(index, value) => updateList("story", index, value)} onAdd={() => update("story", [...draft.story, ""])} onRemove={(index) => update("story", draft.story.filter((_, itemIndex) => itemIndex !== index))} /><label className="catalog-checkbox"><input type="checkbox" checked={draft.featured} onChange={(event) => update("featured", event.target.checked)} /> Feature on the home page</label></fieldset>
         <fieldset><legend>Product details</legend><div className="catalog-details">{draft.details.map((detail, index) => <div key={`${index}-${detail.label}`}><label>Label<input value={detail.label} onChange={(event) => updateDetail(index, "label", event.target.value)} required /></label><label>Value<input value={detail.value} onChange={(event) => updateDetail(index, "value", event.target.value)} required /></label>{draft.details.length > 1 ? <button type="button" className="catalog-remove" onClick={() => update("details", draft.details.filter((_, detailIndex) => detailIndex !== index))}>Remove</button> : null}</div>)}</div><button type="button" className="catalog-add-row" onClick={() => update("details", [...draft.details, { label: "", value: "" }])}>Add detail</button></fieldset>
         <div className="catalog-save-row"><button className="button button-primary" disabled={busy}>{busy ? "Saving…" : selectedSlug ? "Save changes" : "Add product"}</button>{selectedSlug ? <button className="button button-secondary" type="button" onClick={beginNew} disabled={busy}>Create another</button> : null}</div>
-      </form></section>
+      </form>
+      {selectedProduct ? <section className="catalog-form" aria-labelledby="stock-heading"><h3 id="stock-heading">Stock counts</h3><p>These counts are not yet connected to checkout. Continue verifying availability before confirming orders.</p><p>Save product variants before entering their stock counts.</p>{selectedProduct.colors.flatMap((color) => selectedProduct.sizes.map((size) => <StockRow key={JSON.stringify([selectedProduct.slug, color, size])} product={selectedProduct} color={color} size={size} onSaved={(updated) => setProducts((current) => current.map((item) => item.slug === updated.slug ? updated : item))} />))}</section> : null}
+      </section>
     </div>
   </main>;
+}
+
+function StockRow({ product, color, size, onSaved }: { product: CatalogProduct; color: string; size: string; onSaved: (product: CatalogProduct) => void }) {
+  const current = product.inventory?.find((item) => item.color === color && item.size === size);
+  const [count, setCount] = useState(current ? String(current.onHand) : "");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setMessage("");
+    try {
+      const result = await readJson(await fetch(`/api/admin/products/${encodeURIComponent(product.slug)}/inventory`, {
+        method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ color, size, onHand: Number(count) }),
+      })) as { product: CatalogProduct };
+      onSaved(result.product); setMessage("Saved.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save stock."); }
+    finally { setSaving(false); }
+  }
+
+  return <form onSubmit={save} className="catalog-form-grid"><label>{color} / {size} on hand<input type="number" min="0" max="1000000" step="1" value={count} onChange={(event) => setCount(event.target.value)} required /></label><p>Reserved: {current?.reserved ?? 0} · Available: {current ? current.onHand - current.reserved : "Not counted"}</p><button className="button button-secondary" disabled={saving}>{saving ? "Saving…" : "Save count"}</button><span role="status">{message}</span></form>;
 }
 
 function Repeater({ label, values, multiline = false, onChange, onAdd, onRemove }: { label: string; values: string[]; multiline?: boolean; onChange: (index: number, value: string) => void; onAdd: () => void; onRemove: (index: number) => void }) {
