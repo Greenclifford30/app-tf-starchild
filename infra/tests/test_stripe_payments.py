@@ -2,6 +2,8 @@ import importlib.util
 import json
 import os
 import sys
+import tempfile
+import zipfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -12,10 +14,16 @@ from uuid import uuid4
 from boto3.dynamodb.types import TypeDeserializer
 
 ROOT = Path(__file__).parents[1]
-LAYER = ROOT / '.terraform/payment-layer/python'
-if not (LAYER / 'starchild_stripe.py').exists():
-    raise unittest.SkipTest('Build the Stripe SDK layer with scripts/build_payment_layer.sh to run Stripe tests')
-sys.path.insert(0, str(LAYER))
+# Exercise the same committed dependency bundle and helper sources used by remote runs.
+_ARTIFACT_DIR = tempfile.TemporaryDirectory(prefix='starchild-payment-tests-')
+with zipfile.ZipFile(ROOT / 'artifacts/stripe-python-3.13-arm64.zip') as artifact:
+    artifact.extractall(_ARTIFACT_DIR.name)
+sys.path.insert(0, str(Path(_ARTIFACT_DIR.name) / 'python'))
+sys.path.insert(0, str(ROOT / 'src/payment_layer'))
+validation_spec = importlib.util.spec_from_file_location('order_validation', ROOT / 'src/lambda/create_order/lambda_function.py')
+validation_module = importlib.util.module_from_spec(validation_spec)
+sys.modules['order_validation'] = validation_module
+validation_spec.loader.exec_module(validation_module)
 deserializer = TypeDeserializer()
 
 class Table:
@@ -82,6 +90,17 @@ class StripePaymentsTests(unittest.TestCase):
             'collected_information': {'shipping_details': {'name': 'Ada Lovelace', 'address': {'line1': '1 Road', 'city': 'Chicago', 'state': 'IL', 'postal_code': '60601', 'country': 'US'}}},
             'payment_intent': {'id': 'pi_test', 'metadata': {'starchild_attempt_id': self.attempt}, 'status': 'requires_capture', 'amount_capturable': 4075, 'latest_charge': {'payment_method_details': {'card': {'capture_before': 2000000000}}}}}
         handler.authorize('cs_test')
+
+    def test_dependency_artifact_contains_arm64_libraries_and_no_project_helpers(self):
+        with zipfile.ZipFile(ROOT / 'artifacts/stripe-python-3.13-arm64.zip') as artifact:
+            names = artifact.namelist()
+            self.assertIn('python/stripe/__init__.py', names)
+            self.assertNotIn('python/starchild_stripe.py', names)
+            self.assertNotIn('python/order_validation.py', names)
+            for name in (entry for entry in names if entry.endswith('.so')):
+                header = artifact.read(name)[:20]
+                self.assertEqual(header[:4], b'\x7fELF')
+                self.assertEqual(int.from_bytes(header[18:20], 'little'), 183, name)
 
     def test_checkout_prices_are_server_derived_and_retry_is_idempotent(self):
         self.create(); self.create()

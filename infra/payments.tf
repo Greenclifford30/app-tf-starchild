@@ -5,17 +5,35 @@ resource "aws_secretsmanager_secret" "stripe" {
   description = "JSON containing Stripe secret_key and webhook_secret."
 }
 
-data "archive_file" "payment_layer" {
-  count       = var.stripe_payments_enabled ? 1 : 0
-  type        = "zip"
-  source_dir  = "${path.module}/.terraform/payment-layer"
-  output_path = "${path.module}/.terraform/payment-layer.zip"
-}
+# Dependency artifact is checked in so remote plan and apply workers both receive it.
 resource "aws_lambda_layer_version" "payments" {
   count                    = var.stripe_payments_enabled ? 1 : 0
   layer_name               = "${local.name_prefix}-stripe-sdk"
-  filename                 = data.archive_file.payment_layer[0].output_path
-  source_code_hash         = data.archive_file.payment_layer[0].output_base64sha256
+  filename                 = "${path.module}/artifacts/stripe-python-3.13-arm64.zip"
+  source_code_hash         = filebase64sha256("${path.module}/artifacts/stripe-python-3.13-arm64.zip")
+  compatible_runtimes      = ["python3.13"]
+  compatible_architectures = ["arm64"]
+}
+
+# Package project code independently so it tracks source edits without rebuilding dependencies.
+data "archive_file" "payment_helpers" {
+  count       = var.stripe_payments_enabled ? 1 : 0
+  type        = "zip"
+  output_path = "${path.module}/.terraform/payment-helpers.zip"
+  source {
+    content  = file("${path.module}/src/payment_layer/starchild_stripe.py")
+    filename = "python/starchild_stripe.py"
+  }
+  source {
+    content  = file("${path.module}/src/lambda/create_order/lambda_function.py")
+    filename = "python/order_validation.py"
+  }
+}
+resource "aws_lambda_layer_version" "payment_helpers" {
+  count                    = var.stripe_payments_enabled ? 1 : 0
+  layer_name               = "${local.name_prefix}-payment-helpers"
+  filename                 = data.archive_file.payment_helpers[0].output_path
+  source_code_hash         = data.archive_file.payment_helpers[0].output_base64sha256
   compatible_runtimes      = ["python3.13"]
   compatible_architectures = ["arm64"]
 }
@@ -69,7 +87,7 @@ resource "aws_lambda_function" "payments" {
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.13"
   architectures    = ["arm64"]
-  layers           = [aws_lambda_layer_version.payments[0].arn]
+  layers           = [aws_lambda_layer_version.payments[0].arn, aws_lambda_layer_version.payment_helpers[0].arn]
   timeout          = 25
   memory_size      = 256
   environment {
