@@ -89,17 +89,18 @@ resource "aws_lambda_function" "customer_notifications" {
     variables = {
       CUSTOMER_NOTIFICATIONS_TABLE = aws_dynamodb_table.customer_notifications.name
       NOTIFICATION_FROM            = "Starchild <orders@starchildclo.com>"
+      NOTIFICATION_EMAIL           = var.notification_email
     }
   }
   depends_on = [aws_cloudwatch_log_group.customer_notifications, aws_iam_role_policy.customer_notifications, aws_iam_role_policy_attachment.customer_notifications_logs]
 }
 resource "aws_lambda_event_source_mapping" "customer_notifications" {
-  event_source_arn                   = aws_dynamodb_table.customer_notifications.stream_arn
-  function_name                      = aws_lambda_function.customer_notifications.arn
-  starting_position                  = "TRIM_HORIZON"
-  batch_size                         = 1
-  maximum_retry_attempts             = 5
-  function_response_types            = ["ReportBatchItemFailures"]
+  event_source_arn        = aws_dynamodb_table.customer_notifications.stream_arn
+  function_name           = aws_lambda_function.customer_notifications.arn
+  starting_position       = "TRIM_HORIZON"
+  batch_size              = 1
+  maximum_retry_attempts  = 5
+  function_response_types = ["ReportBatchItemFailures"]
   destination_config {
     on_failure {
       destination_arn = aws_sqs_queue.customer_notifications_failed.arn

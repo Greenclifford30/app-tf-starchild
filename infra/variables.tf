@@ -81,3 +81,19 @@ variable "customer_ses_ready" {
     error_message = "Verify the SES domain and DKIM and obtain production sending access before enabling customer emails; set customer_ses_ready to true after verification."
   }
 }
+
+variable "stripe_payments_enabled" {
+  description = "Enable Stripe infrastructure after building the SDK layer and preparing account configuration."
+  type        = bool
+  default     = false
+}
+
+variable "stripe_apparel_tax_code" {
+  description = "Stripe Tax code configured for the store's apparel."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.stripe_apparel_tax_code == "" || can(regex("^txcd_[0-9]+$", var.stripe_apparel_tax_code))
+    error_message = "Set a Stripe apparel tax code when payments are enabled."
+  }
+}

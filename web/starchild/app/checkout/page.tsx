@@ -5,7 +5,7 @@ import CheckoutForm from "./checkout-form";
 
 export const metadata: Metadata = {
   title: "Checkout | Starchild Clothing",
-  description: "Submit a Starchild order request and receive manual payment details.",
+  description: "Securely authorize your Starchild order.",
 };
 
 export default function CheckoutPage() {
@@ -15,7 +15,7 @@ export default function CheckoutPage() {
         <Link className="wordmark" href="/" aria-label="Starchild home">
           <BrandLogo />
         </Link>
-        <p className="checkout-secure-note"><span aria-hidden="true">●</span> Secure order request</p>
+        <p className="checkout-secure-note"><span aria-hidden="true">●</span> Secure checkout</p>
       </header>
       <CheckoutForm />
     </main>

@@ -4,7 +4,8 @@ import os
 import unittest
 from copy import deepcopy
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 from uuid import uuid4
 
 from boto3.dynamodb.types import TypeDeserializer
@@ -223,6 +224,36 @@ class AdminOrdersTests(unittest.TestCase):
             handler.cursor_decode(cursor, 'events:one', {'pk', 'sk'}, ('pk', 'ORDER#one'))
         with self.assertRaises(handler.ApiError):
             handler.cursor_decode(cursor, 'events:one', {'pk', 'sk', 'index_sort'})
+
+    def test_stripe_confirmation_uses_authorized_snapshot_and_idempotent_capture(self):
+        request = self.database.Table('requests-test').items[(self.request_id,)]
+        request.update(payment_provider='stripe', payment_status='AUTHORIZED', payment_intent_id='pi_test',
+                       checkout_session_id='cs_test', capture_before=2000000000, tax_cents=100, total_cents=3300)
+        intent = SimpleNamespace(retrieve=MagicMock(return_value={'status': 'requires_capture', 'amount_capturable': 3300}), capture=MagicMock())
+        stripe = SimpleNamespace(PaymentIntent=intent)
+        with patch.object(handler, 'stripe_lock'), patch.object(handler, 'stripe_service', return_value=(stripe, lambda x: x)):
+            order = handler.confirm(self.request_id, {'availabilityConfirmed': True}, 'admin')
+            self.assertEqual(order['total_cents'], 3300)
+            self.assertEqual(order['items'][0]['name'], 'Old name')
+            self.assertEqual(order['payment_status'], 'PENDING')
+            handler.confirm(self.request_id, {}, 'admin')
+        self.assertEqual(intent.capture.call_count, 2)
+        self.assertEqual(intent.capture.call_args.kwargs['idempotency_key'], 'capture-' + order['order_id'])
+        with self.assertRaises(handler.ApiError):
+            self.act(order, 'RECORD_PAYMENT', paymentMethod='Cash')
+        with self.assertRaises(handler.ApiError):
+            self.act(order, 'CANCEL', reason='Unavailable')
+
+    def test_expired_stripe_authorization_cannot_be_confirmed(self):
+        request = self.database.Table('requests-test').items[(self.request_id,)]
+        request.update(payment_provider='stripe', payment_status='AUTHORIZED', payment_intent_id='pi_test',
+                       checkout_session_id='cs_test', capture_before=1, tax_cents=0, total_cents=3200)
+        stripe = SimpleNamespace(PaymentIntent=SimpleNamespace(retrieve=MagicMock(return_value={'status': 'canceled', 'amount_capturable': 0})))
+        with patch.object(handler, 'stripe_lock'), patch.object(handler, 'stripe_service', return_value=(stripe, lambda x: x)):
+            with self.assertRaises(handler.ApiError) as error:
+                handler.confirm(self.request_id, {'availabilityConfirmed': True}, 'admin')
+        self.assertEqual(error.exception.status, 409)
+        self.assertNotIn('order_id', handler.get_request(self.request_id))
 
     def test_cursor_scope_validation(self):
         cursor = handler.cursor_encode({'pk': 'ORDER#abc', 'sk': 'META'}, 'one')
