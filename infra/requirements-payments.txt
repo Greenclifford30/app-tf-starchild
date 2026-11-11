@@ -1,0 +1,8 @@
+# Pin every packaged dependency so the committed Lambda layer is reproducible.
+stripe==16.1.0
+requests==2.34.2
+typing_extensions==4.16.0
+certifi==2026.10.23
+charset_normalizer==3.5.2
+idna==3.20
+urllib3==2.8.0

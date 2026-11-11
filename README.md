@@ -1,6 +1,6 @@
 # Starchild Clothing MVP
 
-Starchild is a Next.js storefront for browsing products, selecting variants, maintaining a persistent cart, and submitting a manual order request. No online payment is collected in the MVP.
+Starchild is a Next.js storefront for browsing products, selecting variants, and checking out with Stripe. Payment is authorized at checkout and captured after an administrator verifies availability.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ AWS Amplify Hosting (Next.js)
 API Gateway HTTP API -> Lambda -> DynamoDB
                                   |
                                   v
-                              SNS email
+                       SNS / Amazon SES email
 ```
 
 - `web/starchild`: Next.js frontend hosted by AWS Amplify

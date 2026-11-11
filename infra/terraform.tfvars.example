@@ -1,7 +1,20 @@
 environment        = "prod"
 notification_email = "owner@example.com"
+# Keep SNS until the SES domain and recipient are ready; see infra/README.md.
+notification_transport  = "sns"
+retain_sns_notifications = true
 allowed_origins = [
   "http://localhost:3000",
   "https://main.example.amplifyapp.com",
-  "https://example.com"
+  "https://starchildclo.com",
+  "https://www.starchildclo.com"
 ]
+
+# Required for customer communications. Replace before planning; verify SES domain,
+# DKIM, and production sending access in the configured AWS region first.
+payment_instructions = ""
+customer_ses_ready   = false
+
+# Stripe remains disabled until the SDK layer, secret, tax settings, and webhook are ready.
+stripe_payments_enabled = false
+stripe_apparel_tax_code  = ""
