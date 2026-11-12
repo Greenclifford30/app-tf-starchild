@@ -7,20 +7,9 @@ resource "aws_acm_certificate" "api" {
   }
 }
 
-# When a hosted zone is supplied, keep the validation record for ACM renewal.
-resource "aws_route53_record" "api_certificate_validation" {
-  count   = var.api_route53_zone_id == null ? 0 : 1
-  zone_id = var.api_route53_zone_id
-  name    = tolist(aws_acm_certificate.api.domain_validation_options)[0].resource_record_name
-  type    = tolist(aws_acm_certificate.api.domain_validation_options)[0].resource_record_type
-  records = [tolist(aws_acm_certificate.api.domain_validation_options)[0].resource_record_value]
-  ttl     = 300
-}
-
 resource "aws_acm_certificate_validation" "api" {
-  count                   = var.enable_api_custom_domain ? 1 : 0
-  certificate_arn         = aws_acm_certificate.api.arn
-  validation_record_fqdns = var.api_route53_zone_id == null ? null : [aws_route53_record.api_certificate_validation[0].fqdn]
+  count           = var.enable_api_custom_domain ? 1 : 0
+  certificate_arn = aws_acm_certificate.api.arn
 }
 
 resource "aws_apigatewayv2_domain_name" "api" {
