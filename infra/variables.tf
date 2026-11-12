@@ -10,6 +10,17 @@ variable "enable_api_custom_domain" {
   default     = false
 }
 
+variable "api_route53_zone_id" {
+  description = "ID of the authoritative public Route 53 hosted zone for starchildclo.com; leave null to manage API DNS externally."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.api_route53_zone_id == null ? true : length(trimspace(var.api_route53_zone_id)) > 0
+    error_message = "api_route53_zone_id must be null or a nonempty hosted zone ID."
+  }
+}
+
 variable "manual_order_inventory_enabled" {
   description = "Reserve stock on confirmation of manual requests. Stripe checkout is not yet connected to inventory."
   type        = bool
